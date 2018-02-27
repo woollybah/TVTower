@@ -2406,13 +2406,15 @@ Type TSaveGame Extends TGameState
 		
 		local content:string = "~n".Join(lines)
 
-		local p:TPersist = new TPersist
+		'local p:TPersist = new TPersist
+		Local p:TPersist = New TXMLPersistenceBuilder.Build()
 		local res:TData = TData(p.DeserializeObject(content))
 		if not res then res = new TData
 		res.Add("fileURI", fileURI)
 		res.Add("fileName", GetSavegameName(fileURI) )
 		res.AddNumber("fileTime", FileTime(fileURI))
-
+		p.free()
+		
 		return res
 	End Function
 
@@ -2526,7 +2528,8 @@ Type TSaveGame Extends TGameState
 		EndIf
 		
 		TPersist.maxDepth = 4096*4
-		Local persist:TPersist = New TPersist
+		Local persist:TPersist = New TXMLPersistenceBuilder.Build()
+		'Local persist:TPersist = New TPersist
 		persist.serializer = new TSavegameSerializer
 
 		local savegameSummary:TData = GetGameSummary(savename)
@@ -2557,6 +2560,7 @@ Type TSaveGame Extends TGameState
 			TLogger.Log("Savegame.Load()", "Savegame file ~q"+saveName+"~q is corrupt.", LOG_SAVELOAD | LOG_ERROR)
 			Return False
 		EndIf
+		persist.Free()
 
 		If Not saveGame.CheckGameData()
 			TLogger.Log("Savegame.Load()", "Savegame file ~q"+saveName+"~q is in bad state.", LOG_SAVELOAD | LOG_ERROR)
@@ -2660,7 +2664,8 @@ endrem
 		TPersist.maxDepth = 4096
 		'save the savegame data as xml
 		'TPersist.format=False
-		local p:TPersist = New TPersist
+		Local p:TPersist = New TXMLPersistenceBuilder.Build()
+
 		p.serializer = new TSavegameSerializer
 		if TPersist.compressed
 			p.SerializeToFile(saveGame, saveName+".zip")

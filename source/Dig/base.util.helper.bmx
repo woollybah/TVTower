@@ -289,7 +289,7 @@ Type THelper
 			clone = objTypeID.NewObject()
 
 			'loop over all fields of the object
-			For Local fld:TField=EachIn objTypeID.EnumFields()
+			For Local fld:TField=EachIn objTypeID.EnumFieldsList()
 				Local fldId:TTypeId=fld.TypeId()
 
 				'ignore this field (eg. an auto-populated ID-field)
@@ -337,7 +337,7 @@ Type THelper
 		'(reference, no deep clone!)
 		Local fldId:TTypeId, tarFldId:TTypeID
 		Local tarFld:TField
-		For Local fld:TField = EachIn srcTypeID.EnumFields()
+		For Local fld:TField = EachIn srcTypeID.EnumFieldsList()
 			fldId = fld.TypeId()
 
 			'ignore this field (eg. an auto-populated ID-field)

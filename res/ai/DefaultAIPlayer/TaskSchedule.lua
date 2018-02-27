@@ -330,7 +330,9 @@ function TaskSchedule:PredictAudience(broadcast, qualities, day, hour, block, pr
 		if block == nil then block = 1; end
 
 		-- todo: refresh markets when "office is visited" (stationmap)
-		TVT.audiencePredictor.RefreshMarkets()
+		--if TVT.audiencePredictor.NeedsToRefreshMarkets() == 1 then
+			TVT.audiencePredictor.RefreshMarkets()
+		--end
 		for i=1,4 do
 			-- assume they all send at least a bit as good programme/news as we do
 			local q = math.max(qualities[i], 0.6*qualities[i] + 0.4 * broadcast.GetQuality()) -- Lua-arrays are 1 based
@@ -347,6 +349,7 @@ function TaskSchedule:PredictAudience(broadcast, qualities, day, hour, block, pr
 			TVT.audiencePredictor.SetAverageValueAttraction(i, q)
 	
 		end
+
 		local previousDay, previousHour = self:FixDayAndHour(day, hour-1)
 		if previousBroadcastAttraction == nil then
 			previousBroadcastAttraction = self.Player.Stats.BroadcastStatistics:GetAttraction(previousDay, previousHour, TVT.Constants.BroadcastMaterialType.PROGRAMME)
@@ -558,6 +561,7 @@ function JobAnalyzeEnvironment:Tick()
 		-- not enough "useful" programmes?
 		local okTopicalityCount = 0
 		local okTopicality = 0.25
+
 		for i=0,TVT.of_getProgrammeLicenceCount()-1 do
 			local licence = TVT.of_getProgrammeLicenceAtIndex(i)
 			if (licence ~= nil) then
@@ -593,7 +597,7 @@ function JobAnalyzeEnvironment:Tick()
 						local licenceReq = BuySingleProgrammeLicenceRequisition()
 						licenceReq.minPrice = 0
 						licenceReq.maxPrice = licenceBudget
-						licenceReq.lifeTime = WorldTime.GetTimeGone() + 12 * 3600 --8 hours from now
+						licenceReq.lifeTime = WorldTime.GetTimeGone() + 12 * 3600 --12 hours from now
 						requisition:AddLicenceReq(licenceReq)
 
 						budget = budget - licenceBudget
@@ -1715,6 +1719,7 @@ function JobSchedule:Tick()
 	--optimize existing schedule
 	--==========================
 
+	--TODO: only optimize if needed / something changed
 	self:OptimizeProgrammeSchedule()
 	self:OptimizeAdSchedule()
 
