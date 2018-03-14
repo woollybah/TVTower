@@ -103,6 +103,7 @@ Import "game.gamescriptexpression.bmx"
 Import "game.screen.menu.bmx"
 
 Import "game.network.networkhelper.bmx"
+Import "Dig/external/persistence.mod/persistence.util.bmx"
 
 
 'notify users when there are XML-errors

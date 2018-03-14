@@ -97,6 +97,7 @@ Type TPersist
 	Field fileVersion:Int
 	
 	Field serializers:TMap = New TMap
+	Field _inited:Int
 
 	'RONNY
 	Field SkipUnknownOnDeserialize:int = true
@@ -135,6 +136,7 @@ Type TPersist
 	bbdoc: Serializes an Object to a String.
 	End Rem
 	Method SerializeToString:String(obj:Object)
+		If Not _inited Throw "Use TXMLPersistenceBuilder to create TPersist instance."
 		Free()
 		SerializeObject(obj)
 		
@@ -145,6 +147,7 @@ Type TPersist
 	bbdoc: Serializes an Object to the file @filename.
 	End Rem
 	Method SerializeToFile(obj:Object, filename:String)
+		If Not _inited Throw "Use TXMLPersistenceBuilder to create TPersist instance."
 		Free()
 		SerializeObject(obj)
 		
@@ -164,6 +167,7 @@ Type TPersist
 	about: It is up to the user to free the returned TxmlDoc object.
 	End Rem
 	Method SerializeToDoc:TxmlDoc(obj:Object)
+		If Not _inited Throw "Use TXMLPersistenceBuilder to create TPersist instance."
 		Free()
 		SerializeObject(obj)
 		
@@ -178,6 +182,7 @@ Type TPersist
 	about: It is up to the user to close the stream.
 	End Rem
 	Method SerializeToStream(obj:Object, stream:TStream)
+		If Not _inited Throw "Use TXMLPersistenceBuilder to create TPersist instance."
 		Free()
 		SerializeObject(obj)
 		
@@ -368,8 +373,10 @@ Type TPersist
 	Rem
 	bbdoc: 
 	End Rem
-	Method SerializeObject(obj:Object, parent:TxmlNode = Null)
+	Method SerializeObject:TxmlNode(obj:Object, parent:TxmlNode = Null)
 
+		Local node:TxmlNode
+		
 		If Not doc Then
 			doc = TxmlDoc.newDoc("1.0")
 			parent = TxmlNode.newNode("bmo") ' BlitzMax Object
@@ -394,11 +401,11 @@ Type TPersist
 				objectIsArray = True
 			End If
 			
-			Local node:TxmlNode = parent.addChild(tidName)
+			node = parent.addChild(tidName)
 			
 			Local objRef:String = GetObjRef(obj)
 			node.setAttribute("ref", objRef)
-			objectMap.Insert(objRef, obj)
+			AddObjectRef(obj, node)
 
 			' We need to handle array objects differently..
 			If objectIsArray Then
@@ -430,9 +437,8 @@ Type TPersist
 						
 				' special case for String object
 				If tid = StringTypeId Then
-					' escape special chars
 					Local s:String = doc.encodeEntities(String(obj))
-					node.SetContent(s)
+					node.setContent(s)
 				Else
 					SerializeByType(tid, obj, node)
 				End If
@@ -440,6 +446,8 @@ Type TPersist
 			End If
 	
 		End If
+		
+		Return node
 		
 	End Method
 	
@@ -468,6 +476,7 @@ Type TPersist
 	@options relate to libxml specific parsing flags that can be applied.
 	End Rem
 	Method DeSerialize:Object(data:Object, options:Int = 0)
+		If Not _inited Throw "Use TXMLPersistenceBuilder to create TPersist instance."
 
 		xmlParserMaxDepth = maxDepth
 		
@@ -485,6 +494,8 @@ Type TPersist
 	about: It is up to the user to free the supplied TxmlDoc.
 	End Rem
 	Method DeSerializeFromDoc:Object(xmlDoc:TxmlDoc)
+		If Not _inited Throw "Use TXMLPersistenceBuilder to create TPersist instance."
+
 		doc = xmlDoc
 
 		xmlParserMaxDepth = maxDepth
@@ -502,6 +513,7 @@ Type TPersist
 	about: @options relate to libxml specific parsing flags that can be applied.
 	End Rem
 	Method DeSerializeFromFile:Object(filename:String, options:Int = 0)
+		If Not _inited Throw "Use TXMLPersistenceBuilder to create TPersist instance."
 	
 		xmlParserMaxDepth = maxDepth
 
@@ -521,6 +533,8 @@ Type TPersist
 	about: @options relate to libxml specific parsing flags that can be applied.
 	End Rem
 	Method DeSerializeFromStream:Object(stream:TStream, options:Int = 0)
+		If Not _inited Throw "Use TXMLPersistenceBuilder to create TPersist instance."
+
 		Local data:String
 		Local buf:Byte[2048]
 
@@ -547,10 +561,14 @@ Type TPersist
 		End If
 	End Method
 	
+	Method AddObjectRef(obj:Object, node:TxmlNode)
+		objectMap.Insert(node.getAttribute("ref"), obj)
+	End Method
+	
 	Method CreateObjectInstance:Object(objType:TTypeId, node:TxmlNode)
 		' create the object
 		Local obj:Object = objType.NewObject()
-		objectMap.Insert(node.getAttribute("ref"), obj)
+		AddObjectRef(obj, node)
 		Return obj
 	End Method
 	
@@ -740,7 +758,7 @@ Type TPersist
 				
 				Local size:Int = node.getAttribute("size").toInt()
 				obj = objType.NewArray(size)
-				objectMap.Insert(node.getAttribute("ref"), obj)
+				AddObjectRef(obj, node)
 
 				If size > 0 Then
 					Local arrayElementType:TTypeId = objType.ElementType()
@@ -795,7 +813,7 @@ Type TPersist
 				' special case for String object
 				If objType = StringTypeId Then
 					obj = node.GetContent()
-					objectMap.Insert(node.getAttribute("ref"), obj)
+					AddObjectRef(obj, node)
 					Return obj
 				End If
 
@@ -891,6 +909,7 @@ Type TXMLPersistenceBuilder
 	End Rem
 	Method Build:TPersist()
 		Local persist:TPersist = New TPersist
+		persist._inited = True
 		
 		For Local s:TXMLSerializer = EachIn serializers.Values()
 			persist.AddSerializer(s)
@@ -947,8 +966,8 @@ Type TXMLSerializer
 	Rem
 	bbdoc: 
 	End Rem
-	Method SerializeObject(obj:Object, node:TxmlNode)
-		persist.SerializeObject(obj, node)
+	Method SerializeObject:TxmlNode(obj:Object, node:TxmlNode)
+		Return persist.SerializeObject(obj, node)
 	End Method
 	
 	Rem
@@ -992,6 +1011,13 @@ Type TXMLSerializer
 			Return True
 		End If
 		AddObjectRef(ref, obj)
+	End Method
+
+	Rem
+	bbdoc: Adds the xml reference to the object map, in order to track what object instances have been processed.
+	End Rem
+	Method AddObjectRefNode(node:TxmlNode, obj:Object)
+		persist.AddObjectRef(obj, node)
 	End Method
 	
 	Rem
