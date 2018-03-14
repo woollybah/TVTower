@@ -1841,7 +1841,8 @@ End Type
 'just an object holding all data which has to get saved
 'it is kind of an "DataCollectionCollection" ;D
 Type TGameState
-	Field _gameSummary:TData = Null
+	Field ___gameSummary:TData = Null
+	Field _gameSummary:TData = Null 'for old savegame-compatibility
 	Field _Game:TGame = Null
 	Field _BuildingTime:TBuildingTime = Null
 	Field _WorldTime:TWorldTime = Null
@@ -2238,15 +2239,15 @@ Type TSaveGame Extends TGameState
 	'override to add time storage
 	Method BackupGameData:Int()
 		'save a short summary of the game at the begin of the file
-		_gameSummary = new TData
-		_gameSummary.Add("game_version", VersionString)
-		_gameSummary.Add("game_builddate", VersionDate)
-		_gameSummary.Add("game_mode", "singleplayer")
-		_gameSummary.AddNumber("game_timeGone", GetWorldTime().GetTimeGone())
-		_gameSummary.Add("player_name", GetPlayer().name)
-		_gameSummary.Add("player_channelName", GetPlayer().channelName)
-		_gameSummary.AddNumber("player_money", GetPlayer().GetMoney())
-		_gameSummary.Add("savegame_version", SAVEGAME_VERSION)
+		___gameSummary = new TData
+		___gameSummary.Add("game_version", VersionString)
+		___gameSummary.Add("game_builddate", VersionDate)
+		___gameSummary.Add("game_mode", "singleplayer")
+		___gameSummary.AddNumber("game_timeGone", GetWorldTime().GetTimeGone())
+		___gameSummary.Add("player_name", GetPlayer().name)
+		___gameSummary.Add("player_channelName", GetPlayer().channelName)
+		___gameSummary.AddNumber("player_money", GetPlayer().GetMoney())
+		___gameSummary.Add("savegame_version", SAVEGAME_VERSION)
 		'store last ID of all entities, to avoid duplicates
 		'store them in game summary to be able to reset before "restore"
 		'takes place
@@ -2255,8 +2256,8 @@ Type TSaveGame Extends TGameState
 		'- load in game 1 (having game objects with ID 1 - 1000) 
 		'- new entities would again get ID 1 - 1000
 		'  -> duplicates
-		_gameSummary.AddNumber("entitybase_lastID", TEntityBase.lastID)
-		_gameSummary.AddNumber("gameobject_lastID", TGameObject.LastID)
+		___gameSummary.AddNumber("entitybase_lastID", TEntityBase.lastID)
+		___gameSummary.AddNumber("gameobject_lastID", TGameObject.LastID)
 
 		Super.BackupGameData()
 
@@ -2383,6 +2384,7 @@ Type TSaveGame Extends TGameState
 		local lines:string[]
 		local line:string = ""
 		local lineNum:int = 0
+		local validSavegame:int = False
 		While not EOF(stream)
 			line = stream.ReadLine()
 			
@@ -2392,12 +2394,24 @@ Type TSaveGame Extends TGameState
 			
 			lines :+ [line]
 			lineNum :+ 1
-
-			if lineNum = 4 and not line.Find("name=~q_gameSummary~q type=~qTData~q>") > 0
-				print "unknown savegamefile"
-				return null
+print lineNum+": " + line
+			if lineNum = 4 and line.Find("name=~q___gameSummary~q type=~qTData~q>") > 0
+				validSavegame = True
+				exit
 			endif
+			if lineNum = 4 and line.Find("name=~q_gameSummary~q type=~qTData~q>") > 0
+				validSavegame = True
+				exit
+			endif
+
+			if lineNum > 4 then exit
 		Wend
+		CloseStream(stream)
+		if not validSavegame
+			print "unknown savegamefile"
+			return null
+		endif
+		
 		'remove line 3 and 4
 		lines[2] = ""
 		lines[3] = ""
@@ -2527,11 +2541,6 @@ Type TSaveGame Extends TGameState
 			return False
 		EndIf
 		
-		TPersist.maxDepth = 4096*4
-		Local persist:TPersist = New TXMLPersistenceBuilder.Build()
-		'Local persist:TPersist = New TPersist
-		persist.serializer = new TSavegameSerializer
-
 		local savegameSummary:TData = GetGameSummary(savename)
 		'invalid savegame
 		if not savegameSummary
@@ -2544,6 +2553,12 @@ Type TSaveGame Extends TGameState
 		TEntityBase.lastID = savegameSummary.GetInt("entitybase_lastID", 3000000)
 		TGameObject.LastID = savegameSummary.GetInt("gameobject_lastID", 3000000)
 		TLogger.Log("Savegame.Load()", "Restored TEntityBase.lastID="+TEntityBase.lastID+", TGameObject.LastID="+TGameObject.LastID+".", LOG_SAVELOAD | LOG_DEBUG)
+
+
+		TPersist.maxDepth = 4096*4
+		Local persist:TPersist = New TXMLPersistenceBuilder.Build()
+		'Local persist:TPersist = New TPersist
+		persist.serializer = new TSavegameSerializer
 
 
 		'try to repair older savegames
