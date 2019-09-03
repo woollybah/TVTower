@@ -36,22 +36,14 @@ Type TGameBase {_exposeToLua="selected"}
 	'last moment a WorlTime-"minute" was gone (for missed minutes)
 	Field lastTimeMinuteGone:Double = 0
 
-	'refill movie agency every X Minutes
-	Field refillMovieAgencyTimer:Int = 180
 	'minutes till movie agency gets refilled again
 	Field refillMovieAgencyTime:Int = 180
 
-	'refill script agency every X Minutes
-	Field refillScriptAgencyTimer:Int = -1
 	'minutes till script agency gets refilled again
 	Field refillScriptAgencyTime:Int = -1
 
-	'refill ad agency every X Minutes
-	Field refillAdAgencyTimer:Int = 240
 	'minutes till ad agency gets refilled again
 	Field refillAdAgencyTime:Int = 240
-	'refill completely on next refill run?
-	Field refillAdAgencyPercentage:Float = 0.5
 	Field refillAdAgencyOverridePercentage:Float = 0.5
 
 	Field playerNames:string[] = ["Ronny", "Sandra", "Seidi", "Alfi"]
@@ -114,18 +106,6 @@ Type TGameBase {_exposeToLua="selected"}
 		lastTimeRealTimeSecondGone = 0
 		lastTimeMinuteGone = 0
 
-		refillMovieAgencyTimer = 180
-		refillMovieAgencyTime = 180
-
-		refillScriptAgencyTimer = 300
-		refillScriptAgencyTime = 300
-
-		refillAdAgencyTimer = 240
-		refillAdAgencyTime = 240
-
-		refillAdAgencyPercentage = 0.5
-		refillAdAgencyOverridePercentage = 0.5
-
 		networkgame = 0
 		startNetworkGame = 0
 		onlinegame = 0
@@ -144,6 +124,15 @@ Type TGameBase {_exposeToLua="selected"}
 		'reset arrays
 		terrorists = new TFigureBase[2]
 		marshals = new TFigureBase[2]
+	End Method
+
+
+	Method SetPaused(bool:Int=False)
+	End Method
+
+
+	Method IsPaused:int()
+		return False
 	End Method
 
 

@@ -2,28 +2,54 @@
 -- ============================
 -- Autoren: Manuel Vögele (STARS_crazy@gmx.de)
 --          Ronny Otto
--- Version: 30.10.2016
+-- Version: 06.07.2019
 
-_G["APP_VERSION"] = "1.7"
+_G["APP_VERSION"] = "1.8"
+
+-- this is defined by the game engine if called from there
+-- else the file was opened via a direct call
+if CURRENT_WORKING_DIR == nil and debug.getinfo(2, "S") then
+	CURRENT_WORKING_DIR = debug.getinfo(2, "S").source:sub(2):match("(.*[/\\])") or "."
+	package.path = CURRENT_WORKING_DIR .. '/?.lua;' .. package.path .. ';'
+end
 
 -- ##### INCLUDES #####
 -- use slash for directories - windows accepts it, linux needs it
 -- or maybe package.config:sub(1,1)
-dofile("res/ai/DefaultAIPlayer/AIEngine.lua")
-dofile("res/ai/DefaultAIPlayer/CommonObjects.lua")
-dofile("res/ai/DefaultAIPlayer/BudgetManager.lua")
-dofile("res/ai/DefaultAIPlayer/Strategy.lua")
-dofile("res/ai/DefaultAIPlayer/TaskMovieDistributor.lua")
-dofile("res/ai/DefaultAIPlayer/TaskNewsAgency.lua")
-dofile("res/ai/DefaultAIPlayer/TaskAdAgency.lua")
-dofile("res/ai/DefaultAIPlayer/TaskSchedule.lua")
-dofile("res/ai/DefaultAIPlayer/TaskStationMap.lua")
-dofile("res/ai/DefaultAIPlayer/TaskBoss.lua")
-dofile("res/ai/DefaultAIPlayer/TaskRoomBoard.lua")
-dofile("res/ai/DefaultAIPlayer/TaskArchive.lua")
+--[[
+require "AIEngine"
+require "CommonObjects"
+require "BudgetManager"
+require "Strategy"
+require "TaskMovieDistributor"
+require "TaskNewsAgency"
+require "TaskAdAgency"
+require "TaskSchedule"
+require "TaskStationMap"
+require "TaskBoss"
+require "TaskRoomBoard"
+require "TaskArchive"
+if (unitTestMode) then require "UnitTests" end
+]]
+--
+local scriptPath = "res/ai/DefaultAIPlayer/"
+--local scriptPath = ""
+dofile(scriptPath .. "AIEngine.lua")
+dofile(scriptPath .. "CommonObjects.lua")
+dofile(scriptPath .. "BudgetManager.lua")
+dofile(scriptPath .. "Strategy.lua")
+dofile(scriptPath .. "TaskMovieDistributor.lua")
+dofile(scriptPath .. "TaskNewsAgency.lua")
+dofile(scriptPath .. "TaskAdAgency.lua")
+dofile(scriptPath .. "TaskSchedule.lua")
+dofile(scriptPath .. "TaskStationMap.lua")
+dofile(scriptPath .. "TaskBoss.lua")
+dofile(scriptPath .. "TaskRoomBoard.lua")
+dofile(scriptPath .. "TaskArchive.lua")
 if (unitTestMode) then
-	dofile("res/ai/DefaultAIPlayer/UnitTests.lua")
+	dofile(scriptPath .. "UnitTests.lua")
 end
+--]]
 
 -- ##### GLOBALS #####
 aiIsActive = true
@@ -83,6 +109,8 @@ function DefaultAIPlayer:initializePlayer()
 	self.ExpansionPriority = math.random(3,8)
 	--Handlungsgeschwindigkeit 2-4
 	self.BrainSpeed = math.random(2,4)
+
+	--strategy of the player
 	self.Strategy = DefaultStrategy()
 
 	-- budget saving from 10-30%
@@ -91,6 +119,9 @@ function DefaultAIPlayer:initializePlayer()
 	self.Budget.ExtraFixedCostsSavingsPercentage = 0.4 + 0.10 * math.random(0,3)
 
 	self.archEnemyID = -1
+
+	self.programmeLicencesInSuitcaseCount = 0
+	self.programmeLicencesInArchiveCount = 0
 
 	self.currentAwardType = -1
 	self.currentAwardStartTime = -1
@@ -154,6 +185,33 @@ end
 
 function DefaultAIPlayer:OnGameBegins()
 	self.Strategy:Start(self)
+
+--[[
+	local se = StatisticEvaluator()
+	for j = 0, 3 do
+		debugMsg("run " .. j)
+		for i = 0, 2 do
+			se:AddValue(1 + i*2)
+			debugMsg("added " .. i .. ".  AverageValue=" .. se.AverageValue .. "  minValue=" .. se.MinValue .. "  maxValue=" .. se.MaxValue .. "  TotalSum=" .. se.TotalSum .. "  CurrentValue=" .. se.CurrentValue .. "  Values=" .. se.Values)
+		end
+		se:Adjust()
+		debugMsg("adjusted.  AverageValue=" .. se.AverageValue .. "  minValue=" .. se.MinValue .. "  maxValue=" .. se.MaxValue .. "  TotalSum=" .. se.TotalSum .. "  CurrentValue=" .. se.CurrentValue .. "  Values=" .. se.Values)
+	end
+
+	debugMsg("--------------------")
+	debugMsg("--------------------")
+
+	se = StatisticEvaluatorOld()
+	for j = 0, 3 do
+		debugMsg("run " .. j)
+		for i = 0, 2 do
+			se:AddValue(1 + i*2)
+			debugMsg("added " .. i .. ".  AverageValue=" .. se.AverageValue .. "  minValue=" .. se.MinValue .. "  maxValue=" .. se.MaxValue .. "  TotalSum=" .. se.TotalSum .. "  CurrentValue=" .. se.CurrentValue .. "  Values=" .. se.Values)
+		end
+		se:Adjust()
+		debugMsg("adjusted.  AverageValue=" .. se.AverageValue .. "  minValue=" .. se.MinValue .. "  maxValue=" .. se.MaxValue .. "  TotalSum=" .. se.TotalSum .. "  CurrentValue=" .. se.CurrentValue .. "  Values=" .. se.Values)
+	end
+]]
 end
 
 
@@ -199,6 +257,7 @@ function DefaultAIPlayer:OnPlayerGoesBankrupt(playerID)
 	end
 end
 
+
 function DefaultAIPlayer:OnMoneyChanged(value, reason, reference)
 	self.Budget:OnMoneyChanged(value, reason, reference)
 	for k,v in pairs(self.TaskList) do
@@ -206,9 +265,11 @@ function DefaultAIPlayer:OnMoneyChanged(value, reason, reference)
 	end
 end
 
+
 function DefaultAIPlayer:AddRequisition(requisition)
 	table.insert(self.Requisitions, requisition)
 end
+
 
 function DefaultAIPlayer:RemoveRequisition(requisition)
 	local index = table.getIndex(self.Requisitions, requisition)
@@ -216,6 +277,7 @@ function DefaultAIPlayer:RemoveRequisition(requisition)
 		table.remove(self.Requisitions, index)
 	end
 end
+
 
 function DefaultAIPlayer:RemoveRequisitionByReason(reason)
 	if self.Requisitions == nil then return; end
@@ -244,6 +306,7 @@ function DefaultAIPlayer:GetRequisitionPriority(taskId)
 	return prio
 end
 
+
 function DefaultAIPlayer:GetRequisitionsByTaskId(taskId, ignoreActuality)
 	local result = {}
 
@@ -255,6 +318,7 @@ function DefaultAIPlayer:GetRequisitionsByTaskId(taskId, ignoreActuality)
 
 	return result
 end
+
 
 function DefaultAIPlayer:GetRequisitionsByOwner(TaskOwnerId, ignoreActuality)
 	local result = {}
@@ -316,10 +380,12 @@ _G["BusinessStats"] = class(SLFDataObject, function(c)
 	SLFDataObject.init(c)	-- must init base!
 	c.Audience = nil;
 	c.BroadcastStatistics = nil;
-	c.SpotProfit = nil;
-	c.SpotProfitPerSpot = nil;
-	c.SpotProfitPerSpotAcceptable = nil;
-	c.SpotPenalty = nil;
+	c.SpotProfitCPM = nil;
+	c.SpotProfitCPMPerSpot = nil;
+	c.SpotProfitCPMPerSpotAcceptable = nil;
+	c.SpotPenaltyCPM = nil;
+	c.SpotPenaltyCPMPerSpot = nil;
+	c.SpotPenaltyCPMPerSpotAcceptable = nil;
 	c.MoviePricePerBlockAcceptable = nil;
 	c.SeriesPricePerBlockAcceptable = nil;
 	c.MovieQualityAcceptable = nil;
@@ -343,10 +409,12 @@ end
 function BusinessStats:Initialize()
 	self.Audience = StatisticEvaluator()
 	self.BroadcastStatistics = BroadcastStatistics()
-	self.SpotProfit = StatisticEvaluator()
-	self.SpotProfitPerSpot = StatisticEvaluator()
-	self.SpotProfitPerSpotAcceptable = StatisticEvaluator()
-	self.SpotPenalty = StatisticEvaluator()
+	self.SpotProfitCPM = StatisticEvaluator()
+	self.SpotProfitCPMPerSpot = StatisticEvaluator()
+	self.SpotProfitCPMPerSpotAcceptable = StatisticEvaluator()
+	self.SpotPenaltyCPM = StatisticEvaluator()
+	self.SpotPenaltyCPMPerSpot = StatisticEvaluator()
+	self.SpotPenaltyCPMPerSpotAcceptable = StatisticEvaluator()
 	self.MoviePricePerBlockAcceptable = StatisticEvaluator()
 	self.SeriesPricePerBlockAcceptable = StatisticEvaluator()
 	self.MovieQualityAcceptable = StatisticEvaluator()
@@ -363,10 +431,12 @@ end
 
 function BusinessStats:OnDayBegins()
 	self.Audience:Adjust()
-	self.SpotProfit:Adjust()
-	self.SpotProfitPerSpot:Adjust()
-	self.SpotProfitPerSpotAcceptable:Adjust()
-	self.SpotPenalty:Adjust()
+	self.SpotProfitCPM:Adjust()
+	self.SpotProfitCPMPerSpot:Adjust()
+	self.SpotProfitCPMPerSpotAcceptable:Adjust()
+	self.SpotPenaltyCPM:Adjust()
+	self.SpotPenaltyCPMPerSpot:Adjust()
+	self.SpotPenaltyCPMPerSpotAcceptable:Adjust()
 	self.MoviePricePerBlockAcceptable:Adjust()
 	self.SeriesPricePerBlockAcceptable:Adjust()
 	self.MovieQualityAcceptable:Adjust()
@@ -417,31 +487,36 @@ end
 
 
 function BusinessStats:AddSpot(spot)
-	self.SpotProfit:AddValue(spot.GetProfit())
-	self.SpotProfitPerSpot:AddValue(spot.GetProfit() / spot.GetSpotCount())
+	local profitCPM = 1000 * spot.GetProfit() / spot.GetMinAudience()
+	local penaltyCPM = 1000 * spot.GetPenalty() / spot.GetMinAudience()
+
+	self.SpotProfitCPM:AddValue(profitCPM)
+	self.SpotProfitCPMPerSpot:AddValue(profitCPM / spot.GetSpotCount())
+
 	-- only add simple spots for now (without target groups / limits)
-	if (spot.GetLimitedToTargetGroup() <= 0) and (spot.GetLimitedToGenre() <= 0) and (spot.GetLimitedToProgrammeFlag() <= 0) then
+	if (spot.GetLimitedToTargetGroup() <= 0) and (spot.GetLimitedToProgrammeGenre() <= 0) and (spot.GetLimitedToProgrammeFlag() <= 0) then
 		if (spot.GetMinAudience() < globalPlayer.Stats.Audience.MaxValue) then
-			self.SpotProfitPerSpotAcceptable:AddValue(spot.GetProfit() / spot.GetSpotCount())
+			self.SpotProfitCPMPerSpotAcceptable:AddValue(profitCPM / spot.GetSpotCount())
+			self.SpotPenaltyCPMPerSpotAcceptable:AddValue(penaltyCPM / spot.GetSpotCount())
 		end
 	end
-	self.SpotPenalty:AddValue(spot.GetPenalty())
+	self.SpotPenaltyCPM:AddValue(penaltyCPM)
+	self.SpotPenaltyCPMPerSpot:AddValue(penaltyCPM / spot.GetSpotCount())
 end
 
 
 function BusinessStats:AddMovie(licence)
---RON
---TVT.PrintOut("RON: AddMovie")
-
-	local maxPrice = globalPlayer.TaskList[TASK_MOVIEDISTRIBUTOR].BudgetWholeDay / 2
-	if (CheckMovieBuyConditions(licence, maxPrice)) then -- Preisgrenze
-		local quality = licence.GetQuality(0)
-		if licence.getData() ~= nil and licence.IsSingle() then
-			self.MovieQualityAcceptable:AddValue(quality)
-			self.MoviePricePerBlockAcceptable:AddValue(licence:GetPricePerBlock())
-		else
-			self.SeriesQualityAcceptable:AddValue(quality)
-			self.SeriesPricePerBlockAcceptable:AddValue(licence:GetPricePerBlock())
+	local maxPrice = globalPlayer.TaskList[TASK_MOVIEDISTRIBUTOR].BudgetWholeDay * 0.75
+	--add licences suiting to our potential limits
+	if (CheckMovieBuyConditions(licence, maxPrice)) then
+		if licence ~= nil then
+			if licence.IsSingle() == 1 then
+				self.MovieQualityAcceptable:AddValue( licence.GetQuality() )
+				self.MoviePricePerBlockAcceptable:AddValue(licence:GetPricePerBlock(TVT.ME))
+			else
+				self.SeriesQualityAcceptable:AddValue( licence.GetQuality() )
+				self.SeriesPricePerBlockAcceptable:AddValue(licence:GetPricePerBlock(TVT.ME))
+			end
 		end
 	end
 end
@@ -484,6 +559,7 @@ function getAIPlayer()
 end
 
 -- ##### EVENTS #####
+
 function OnBossCalls(latestWorldTime)
 	infoMsg("Boss calls me! " .. latestWorldTime)
 end
@@ -548,10 +624,15 @@ function OnCommand(command)
 	end
 end
 
+function OnGameBegins()
+	debugMsg("AI-Event: OnGameBegins")
+	getAIPlayer():OnGameBegins()
+end
+
 
 function OnDayBegins()
 	if (aiIsActive) then
-		debugMsg("KI-Event: OnDayBegins")
+		debugMsg("AI-Event: OnDayBegins")
 		getAIPlayer():OnDayBegins()
 	end
 
@@ -570,6 +651,7 @@ function OnInit()
 end
 
 
+
 function OnProgrammeLicenceAuctionGetOutbid(licence, bid, bidderID)
 	--todo
 	debugMsg("TODO: you have been outbid on auction: " .. licence.GetTitle())
@@ -584,6 +666,23 @@ function OnPublicAuthoritiesConfiscateProgrammeLicence(confiscatedLicence, targe
 	--todo
 	debugMsg("Programme licence confiscated: " .. confiscatedLicence.GetTitle())
 end
+
+
+function OnAchievementCompleted(achievement)
+	--debugMsg("OnAchievementCompleted")
+	if (aiIsActive) then
+		getAIPlayer():OnAchievementCompleted(achievement)
+	end
+end
+
+
+function OnWonAward(award)
+	--debugMsg("OnWonAward")
+	if (aiIsActive) then
+		getAIPlayer():OnWonAward(award)
+	end
+end
+
 
 function OnLeaveRoom()
 	--debugMsg("OnLeaveRoom")
@@ -659,6 +758,7 @@ end
 
 -- called before "reloading" a script
 function OnSaveState(timeGone)
+	debugMsg("Serializing AI data")
 	SLFManager.StoreDefinition.Player = getAIPlayer()
 	return SLFManager:save()
 end
@@ -690,27 +790,47 @@ function OnRealTimeSecond(millisecondsPassed)
 end
 
 
+-- called by main loop or AI thread within blitzmax code
+function Update()
+	debugMsg("next count = "  .. MY.GetNextEventCount())
+
+	-- AI deactivated / (game) paused?
+--	if MY.IsActive() == 0 then
+--		return
+--	end
+--[[
+	-- process all happened events
+
+--	local nextEvent
+--	if MY.GetNextEventCount() > 0 then
+	local nextEvent = MY.PopNextEvent()
+	if nextEvent == nil then
+--		MY.sleep(1)
+		debugMsg("next is nil")
+		return false
+	else
+		debugMsg("next is OK")
+	end
+]]
+
+--	while nextEvent do
+	--	debugMsg("nextEvent: name=" .. nextEvent.name .. "  data=" .. nextEvent.data)
+
+		--if nextEvent.name ...
+
+		--OnTick
+		--OnMinute
+		--	...
+
+		--nextEvent = MY.PopNextEvent()
+--	end
+	return
+end
+
+
 function OnTick(timeGone, ticksGone)
 	--debugMsg("OnTick  time:" .. timeGone .." ticks:" .. ticksGone .. " gameMinute:" .. WorldTime.GetDayMinute())
 	getAIPlayer().WorldTicks = tonumber(ticksGone)
-
-	--debug
-	if getAIPlayer().CurrentTask ~= nil then
-		MY.SetAIStringData("currentTask",  getAIPlayer().CurrentTask.typename() )
-		MY.SetAIStringData("currentTaskStatus",  getAIPlayer().CurrentTask.Status )
-		MY.SetAIStringData("currentTaskAssignmentType", getAIPlayer().CurrentTask.assignmentType )
-		if getAIPlayer().CurrentTask.CurrentJob ~= nil then
-			MY.SetAIStringData("currentTaskJob",  getAIPlayer().CurrentTask.CurrentJob.typename() )
-			MY.SetAIStringData("currentTaskJobStatus",  getAIPlayer().CurrentTask.CurrentJob.Status )
-			--debugMsg("Task: "..getAIPlayer().CurrentTask.typename().." ["..getAIPlayer().CurrentTask.Status.."]   Job:"..getAIPlayer().CurrentTask.CurrentJob.typename().. " ["..getAIPlayer().CurrentTask.CurrentJob.Status.."]")
-		end
-	else
-		MY.SetAIStringData("currentTask",  "NONE" )
-		MY.SetAIStringData("currentTaskStatus",  "0" )
-		MY.SetAIStringData("currentTaskAssignmentType", 0)
-		MY.SetAIStringData("currentTaskJob",  "NONE" )
-		MY.SetAIStringData("currentTaskJobStatus",  "0" )
-	end
 
 
 	if (aiIsActive) then
@@ -739,7 +859,7 @@ function OnMinute(number)
 			local broadcast = TVT.GetCurrentAdvertisement()
 			if broadcast ~= nil then
 				-- only for ads
-				if broadcast.isType(TVT.Constants.BroadcastMaterialType.ADVERTISEMENT) then
+				if broadcast.isType(TVT.Constants.BroadcastMaterialType.ADVERTISEMENT) == 1 then
 					local audience = TVT.GetCurrentProgrammeAudience()
 					if audience.GetTotalSum() < TVT.GetCurrentAdvertisementMinAudience() then
 						-- we can only fix if we have licences for trailers

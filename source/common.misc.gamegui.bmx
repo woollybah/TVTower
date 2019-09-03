@@ -3,6 +3,7 @@ Import "Dig/base.gfx.gui.dropdown.bmx"
 Import "Dig/base.gfx.gui.chat.bmx"
 Import "Dig/base.gfx.gui.window.base.bmx"
 Import "Dig/base.gfx.gui.window.modal.bmx"
+Import "Dig/base.gfx.gui.window.modalchain.bmx"
 Import "Dig/base.gfx.gui.list.selectlist.bmx"
 Import "Dig/base.gfx.gui.list.slotlist.bmx"
 Import "Dig/base.gfx.gui.accordeon.bmx"
@@ -221,13 +222,33 @@ Type TGUIGameWindow Extends TGUIWindowBase
 
 
 	Method Update:Int()
-		If guiCaptionTextBox Then guiCaptionTextBox.SetFont(.headerFont)
+		If guiCaptionTextBox Then guiCaptionTextBox.SetFont(headerFont)
 
 		Super.Update()
 	End Method
 End Type
 
 
+
+Type TGUIGameModalWindowChainDialogue extends TGUIModalWindowChainDialogue
+	Method Create:TGUIGameModalWindowChainDialogue(pos:TVec2D, dimension:TVec2D, limitState:String = "")
+		_defaultValueColor = TColor.clBlack.copy()
+		defaultCaptionColor = TColor.clWhite.copy()
+
+		Super.Create(pos, dimension, limitState)
+
+		SetCaptionArea(New TRectangle.Init(-1,10,-1,25))
+		guiCaptionTextBox.SetValueAlignment( ALIGN_CENTER_TOP )
+
+
+		Return Self
+	End Method
+
+	Method SetCaption:Int(caption:String="")
+		Super.SetCaption(caption)
+		If guiCaptionTextBox Then guiCaptionTextBox.SetFont(headerFont)
+	End Method
+End Type
 
 
 Type TGUIGameModalWindow Extends TGUIModalWindow
@@ -246,7 +267,7 @@ Type TGUIGameModalWindow Extends TGUIModalWindow
 
 	Method SetCaption:Int(caption:String="")
 		Super.SetCaption(caption)
-		If guiCaptionTextBox Then guiCaptionTextBox.SetFont(.headerFont)
+		If guiCaptionTextBox Then guiCaptionTextBox.SetFont(headerFont)
 	End Method
 End Type
 
@@ -539,10 +560,12 @@ Type TGUIGameListItem Extends TGUIListItem
 		SetOption(GUI_OBJECT_DRAWMODE_GHOST, True)
 		SetAlpha oldAlpha * 0.5
 
-		local backupAssetName:string = self.asset.getName()
+		local backupAsset:TSprite = asset
+		'local backupAssetName:string = self.asset.getName()
 		self.asset = GetSpriteFromRegistry(assetNameDefault)
 		self.Draw()
-		self.asset = GetSpriteFromRegistry(backupAssetName)
+		'self.asset = GetSpriteFromRegistry(backupAssetName)
+		self.asset = backupAsset
 
 		SetAlpha oldAlpha
 		self.SetOption(GUI_OBJECT_IGNORE_POSITIONMODIFIERS, FALSE)

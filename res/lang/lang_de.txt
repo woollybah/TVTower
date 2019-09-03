@@ -33,6 +33,8 @@ SINGLEPLAYER = Einzelspieler
 DEFAULTS_FOR_NEW_GAME= Vorgaben "Neues Spiel"
 RENDERER = Renderer
 SOUND_ENGINE = Soundengine
+SOUND_MUSIC_VOLUME = Musiklautstärke
+SOUND_SFX_VOLUME = SFX-Lautstärke
 PORT_ONLINEGAME = Port für Onlinespiele
 GAME_SPEED_IN_ROOMS = Spielgeschwind. in Räumen
 
@@ -307,11 +309,12 @@ AD_QUALITY = Qualität
 
 LICENCETYPE_SINGLE = Einzeln
 LICENCETYPE_EPISODE = Episode
-LICENCETYPE_COLLECTION = Lizenzbündel
+LICENCETYPE_COLLECTION = Lizenzpaket
 LICENCETYPE_SERIES = Serie
 LICENCETYPE_FRANCHISE = Franchise
 
 SERIES_WITH_X_EPISODES = Serie mit %EPISODESCOUNT% Folgen
+COLLECTION_WITH_X_ELEMENTS = Paket mit %X% Elementen
 SCRIPT_POTENTIAL= Potenzial
 
 PROGRAMME_GENRE_UNDEFINED = Sonstiges
@@ -516,16 +519,18 @@ DIALOGUE_BOSS_CREDIT_OK1				=	Schon wieder neue Kohle?\nNaja, Sie machen Ihren J
 DIALOGUE_BOSS_CREDIT_OK2				=	Sie verprassen mein gutes Geld!\nIch hoffe für Sie, dass was vernünftiges bei rauskommt.\nMehr als |b|%CREDIT%€|/b| kann ich aber nicht anbieten. Einverstanden?
 DIALOGUE_BOSS_CREDIT_OK_ACCEPT1			=	Ja, den Kredit nehme ich dann wohl.
 DIALOGUE_BOSS_CREDIT_OK_ACCEPT2			=	Danke Chef, das Geld ist gut angelegt!
-DIALOGUE_BOSS_CREDIT_OK_ACCEPT_HALF1	=	Danke Boss, mir reicht die Hälfte, also %CREDITHALF%€.
-DIALOGUE_BOSS_CREDIT_OK_ACCEPT_HALF2	=	Ich bin schon mit %CREDITHALF%€ zufrieden!
+DIALOGUE_BOSS_CREDIT_OK_ACCEPT_HALF1	=	Danke Boss, mir reicht die Hälfte, also |b|%VALUE%€|/b|.
+DIALOGUE_BOSS_CREDIT_OK_ACCEPT_HALF2	=	Ich bin schon mit |b|%VALUE%€|/b| zufrieden!
+DIALOGUE_BOSS_CREDIT_OK_ACCEPT_QUARTER1	=	Also |b|%VALUE%€|/b| reicht mir vollkommen.
+DIALOGUE_BOSS_CREDIT_OK_ACCEPT_QUARTER2	=	Die |b|%VALUE%€|/b| würden mir vollends langen.
 DIALOGUE_BOSS_DECLINE1					=	Ach, nein Danke Boss, hab's mir anders überlegt.
 DIALOGUE_BOSS_DECLINE2					=	Hab's mir doch anders überlegt, bis später Chef.
 DIALOGUE_BOSS_DECLINE3					=	Öhm, ich schau dann wohl später nochmal vorbei.
 DIALOGUE_BOSS_CREDIT_REPAY				=	Wollen Sie nicht erstmal den alten Kredit zurückzahlen?\nSie schulden mir noch |b|%CREDIT%€|/b| - zahlen Sie das ersteinmal ab!\nUnd nun raus bevor ich mich vergesse!!
 DIALOGUE_BOSS_CREDIT_REPAY_ACCEPT		=	Ja, dann zahl ich halt etwas zurück.
 DIALOGUE_BOSS_CREDIT_REPAY_BOSSRESPONSE	=	Soso, wenigstens eine gute Nachricht für den heutigen Tag.\n \nWieviel wollen Sie denn zurückzahlen?
-DIALOGUE_BOSS_CREDIT_REPAY_100K			=	Naja, so |b|100.000€|/b| könnte ich zurückzahlen.
-DIALOGUE_BOSS_CREDIT_REPAY_500K			=	Hmm, ich könnte |b|500.000€|/b| zurückzahlen.
+DIALOGUE_BOSS_CREDIT_REPAY_VALUE1		=	Hmm, ich könnte |b|%VALUE%€|/b| zurückzahlen.
+DIALOGUE_BOSS_CREDIT_REPAY_VALUE2		=	Naja, so |b|%VALUE%€|/b| könnte ich zurückzahlen.
 DIALOGUE_BOSS_CREDIT_REPAY_ALL			=	Eigentlich gleich den kompletten Kredit, also |b|%CREDIT%€|/b|.
 
 DIALOGUE_BOSS_CHANGETOPIC1				=	Können wir nicht über etwas anderes reden?
@@ -1101,7 +1106,7 @@ GENDER_WOMEN_SHORT = F
 
 LIVE_ON_TAPE = Liveaufzeichnung
 ALL_MATCHES_FINISHED = Alle Begegnungen beendet
-
+X_OF_Y_LIVE_MATCHES_ALREADY_STARTED = %X%/%Y% der Live-Begegnungen bereits gestartet.
 
 SHOW_MAP_DETAILS = Zeige Kartendetails
 CLICK_TO_SHOW_ADVANCED_MAP_INFORMATION = Klicken um tiefergehende Karteninformationen anzuzeigen.

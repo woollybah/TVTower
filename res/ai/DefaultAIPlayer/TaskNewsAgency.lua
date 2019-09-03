@@ -8,6 +8,17 @@ _G["TaskNewsAgency"] = class(AITask, function(c)
 	c.BasePriority = 7
 	c.AbonnementBudget = 0
 
+	-- store current abonnement fees (only fetchable while in news studio)
+	-- player starts with a single genre
+	c.newsAbonnementFees = {}
+	c.newsAbonnementFees[TVT.Constants.NewsGenre.CURRENTAFFAIRS] = TVT.GetNewsAbonnementFee(TVT.Constants.NewsGenre.CURRENTAFFAIRS, 1)
+	c.newsAbonnementFees[TVT.Constants.NewsGenre.POLITICS_ECONOMY] = 0
+	c.newsAbonnementFees[TVT.Constants.NewsGenre.SPORT] = 0
+	c.newsAbonnementFees[TVT.Constants.NewsGenre.SHOWBIZ] = 0
+	c.newsAbonnementFees[TVT.Constants.NewsGenre.TECHNICS_MEDIA] = 0
+	c.newsAbonnementFees[TVT.Constants.NewsGenre.CULTURE] = 0
+	c.newsAbonnementTotalFees = c.newsAbonnementFees[TVT.Constants.NewsGenre.CURRENTAFFAIRS]
+
 	c.newsGenrePriority = {
 	                        TVT.Constants.NewsGenre.CURRENTAFFAIRS,
 	                        TVT.Constants.NewsGenre.POLITICS_ECONOMY,
@@ -18,12 +29,14 @@ _G["TaskNewsAgency"] = class(AITask, function(c)
 	                      }
 end)
 
+
 function TaskNewsAgency:typename()
 	return "TaskNewsAgency"
 end
 
+
 function TaskNewsAgency:Activate()
-	-- Was getan werden soll:
+	-- sub tasks => jobs
 	self.CheckEventNewsJob = JobCheckEventNews()
 	self.CheckEventNewsJob.Task = self
 
@@ -36,6 +49,7 @@ function TaskNewsAgency:Activate()
 	self.IdleJob = AIIdleJob()
 	self.IdleJob:SetIdleTicks( math.random(5,15) )
 end
+
 
 function TaskNewsAgency:GetNextJobInTargetRoom()
 	if (self.CheckEventNewsJob.Status ~= JOB_STATUS_DONE) then
@@ -50,9 +64,9 @@ function TaskNewsAgency:GetNextJobInTargetRoom()
 		return self.IdleJob
 	end
 
---	self:SetWait()
 	self:SetDone()
 end
+
 
 --override
 function TaskNewsAgency:getStrategicPriority()
@@ -78,8 +92,22 @@ function TaskNewsAgency:getStrategicPriority()
 end
 
 
+function TaskNewsAgency:UpdateNewsAbonnementFees()
+	-- can only update if in the news studio
+	if TVT.ne_getNewsAbonnementFee(TVT.Constants.NewsGenre.CURRENTAFFAIRS) ~= TVT.RESULT_WRONGROOM then
+		self.newsAbonnementFees[TVT.Constants.NewsGenre.CURRENTAFFAIRS] = TVT.ne_getNewsAbonnementFee(TVT.Constants.NewsGenre.CURRENTAFFAIRS)
+		self.newsAbonnementFees[TVT.Constants.NewsGenre.POLITICS_ECONOMY] = TVT.ne_getNewsAbonnementFee(TVT.Constants.NewsGenre.POLITICS_ECONOMY)
+		self.newsAbonnementFees[TVT.Constants.NewsGenre.SPORT] = TVT.ne_getNewsAbonnementFee(TVT.Constants.NewsGenre.SPORT)
+		self.newsAbonnementFees[TVT.Constants.NewsGenre.SHOWBIZ] = TVT.ne_getNewsAbonnementFee(TVT.Constants.NewsGenre.SHOWBIZ)
+		self.newsAbonnementFees[TVT.Constants.NewsGenre.TECHNICS_MEDIA] =  TVT.ne_getNewsAbonnementFee(TVT.Constants.NewsGenre.TECHNICS_MEDIA)
+		self.newsAbonnementFees[TVT.Constants.NewsGenre.CULTURE] = TVT.ne_getNewsAbonnementFee(TVT.Constants.NewsGenre.CULTURE)
+		self.newsAbonnementTotalFees = TVT.ne_getTotalNewsAbonnementFees()
+	end
+end
+
+
 function TaskNewsAgency:BeforeBudgetSetup()
-	self:SetFixedCosts()
+	self:CalculateFixedCosts()
 
 	-- adjust budget weighting according to player character
 	local player = _G["globalPlayer"]
@@ -102,17 +130,18 @@ function TaskNewsAgency:BeforeBudgetSetup()
 	end
 end
 
-function TaskNewsAgency:BudgetSetup()
-	local baseFee = TVT.ne_getNewsAbonnementFee(TVT.Constants.NewsGenre.CURRENTAFFAIRS, 1)
 
+function TaskNewsAgency:BudgetSetup()
 	-- calculate abonnement budget
 	-- to have at least news, we need a minimum budget to be able to sub-
 	-- scribe to current affairs
+	local baseFee = TVT.GetNewsAbonnementFee(TVT.Constants.NewsGenre.CURRENTAFFAIRS, 1)
 	local tempAbonnementBudget = math.max(baseFee, self.BudgetWholeDay * 0.45)
 	self.AbonnementBudget = tempAbonnementBudget
 	self.CurrentBudget = self.CurrentBudget - self.AbonnementBudget
-	debugMsg("BudgetSetup: AbonnementBudget: " .. self.AbonnementBudget .. "   - CurrentBudget: " .. self.CurrentBudget)
+--	debugMsg("BudgetSetup: AbonnementBudget: " .. self.AbonnementBudget .. "   - CurrentBudget: " .. self.CurrentBudget)
 end
+
 
 function TaskNewsAgency:BudgetMaximum()
 	local money = MY.GetMoney(-1)
@@ -127,20 +156,27 @@ function TaskNewsAgency:BudgetMaximum()
 	end
 end
 
+
 function TaskNewsAgency:OnMoneyChanged(value, reason, reference)
-	if (tostring(reason) == tostring(TVT.Constants.PlayerFinanceEntryType.PAY_NEWS)) then
+	reason = tonumber(reason)
+	if (reason == TVT.Constants.PlayerFinanceEntryType.PAY_NEWS) then
 		self:PayFromBudget(value)
-		self:SetFixedCosts()
-	elseif (tostring(reason) == tostring(TVT.Constants.PlayerFinanceEntryType.PAY_NEWSAGENCIES)) then
+		self:CalculateFixedCosts()
+	elseif (reason == TVT.Constants.PlayerFinanceEntryType.PAY_NEWSAGENCIES) then
 		self:PayFromBudget(value)
-		self:SetFixedCosts()
+		self:CalculateFixedCosts()
 	end
 end
 
-function TaskNewsAgency:SetFixedCosts()
-	self.FixedCosts = TVT.ne_getTotalNewsAbonnementFees()
+
+--override
+function TaskNewsAgency:CalculateFixedCosts()
+	self.FixedCosts = self.newsAbonnementTotalFees
 end
 -- <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
 
 -- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _G["JobCheckEventNews"] = class(AIJob, function(c)
@@ -160,11 +196,8 @@ function JobCheckEventNews:Tick()
 	local terrorLevel = TVT.ne_getTerroristAggressionLevel(-1)
 	local maxTerrorLevel = TVT.ne_getTerroristAggressionLevelMax()
 
---	if terrorLevel >= 4 then
---		kiMsg("Terroranschlag geplant! Terror-Level: " .. terrorLevel)
---	end
 
-	local player = _G["globalPlayer"] --Zugriff die globale Variable
+	local player = _G["globalPlayer"]
 	if player.TaskList[TASK_ROOMBOARD] ~= nil then
 		local roomBoardTask = player.TaskList[TASK_ROOMBOARD]
 		if terrorLevel >= 2 then
@@ -176,13 +209,16 @@ function JobCheckEventNews:Tick()
 			roomBoardTask.RecognizedTerrorLevel = true
 		end
 
-		roomBoardTask.FRDubanTerrorLevel = TVT.ne_getTerroristAggressionLevel(0) --FR Duban Terroristen
-		roomBoardTask.VRDubanTerrorLevel = TVT.ne_getTerroristAggressionLevel(1) --VR Duban Terroristen
+		roomBoardTask.FRDubanTerrorLevel = TVT.ne_getTerroristAggressionLevel(0)
+		roomBoardTask.VRDubanTerrorLevel = TVT.ne_getTerroristAggressionLevel(1)
 	end
 
 	self.Status = JOB_STATUS_DONE
 end
 -- <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
 
 -- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _G["JobNewsAgencyAbonnements"] = class(AIJob, function(c)
@@ -190,18 +226,30 @@ _G["JobNewsAgencyAbonnements"] = class(AIJob, function(c)
 	c.Task = nil
 end)
 
+
 function JobNewsAgencyAbonnements:typename()
 	return "JobNewsAgencyAbonnements"
 end
 
+
 function JobNewsAgencyAbonnements:Prepare(pParams)
 	debugMsg("Adjusting news abonnements")
+	debugMsgDepth(1)
+
+	-- update current fees
+	self.Task:UpdateNewsAbonnementFees()
 end
+
+
+function JobNewsAgencyAbonnements:Stop(pParams)
+	debugMsgDepth(-1)
+end
+
 
 function JobNewsAgencyAbonnements:Tick()
 	local availableBudget = self.Task.AbonnementBudget
 
-	local oldFees = TVT.ne_getTotalNewsAbonnementFees()
+	local oldFees = self.Task.newsAbonnementTotalFees
 
 
 	-- loop over all genres and try to subscribe as much as possible
@@ -214,7 +262,7 @@ function JobNewsAgencyAbonnements:Tick()
 	local tempAvailableBudget = availableBudget
 	-- do NEVER stop abonnements to current affairs
 	-- so budget must be minimimum at level 1
-	tempAvailableBudget = math.max(tempAvailableBudget, TVT.ne_getNewsAbonnementFee(TVT.Constants.NewsGenre.CURRENTAFFAIRS, 1))
+	tempAvailableBudget = math.max(tempAvailableBudget, TVT.GetNewsAbonnementFee(TVT.Constants.NewsGenre.CURRENTAFFAIRS, 1))
 
 	-- fill a "plan" (allows optimization before real adjustment is done)
 	while budgetLeft == true do
@@ -222,7 +270,7 @@ function JobNewsAgencyAbonnements:Tick()
 		for genreIndex, genreID in ipairs(self.Task.newsGenrePriority) do
 
 			local nextLevel = newSubscriptionLevels[genreID] + 1
-			local nextLevelFee = TVT.ne_getNewsAbonnementFee(genreID, nextLevel)
+			local nextLevelFee = TVT.GetNewsAbonnementFee(genreID, nextLevel)
 			if nextLevel <= 3 and tempAvailableBudget >= nextLevelFee then
 				if tempAvailableBudget >= nextLevelFee then
 					budgetLeft = true
@@ -233,44 +281,38 @@ function JobNewsAgencyAbonnements:Tick()
 		end
 	end
 
+
 	-- finally adjust levels
 	for genreIndex, genreID in ipairs(self.Task.newsGenrePriority) do
 		local oldLevel = TVT.ne_getNewsAbonnement(genreID)
-		local newFee = TVT.ne_getNewsAbonnementFee(genreID, newSubscriptionLevels[i])
+		local newFee = TVT.GetNewsAbonnementFee(genreID, newSubscriptionLevels[i])
 		if oldLevel ~= newSubscriptionLevels[genreID] then
 			TVT.ne_setNewsAbonnement(genreID, newSubscriptionLevels[genreID])
-			debugMsg("- Changing genre " ..genreID.. " abonnement level from " .. oldLevel .. " to " .. newSubscriptionLevels[genreID] .. " (new level=" .. TVT.ne_getNewsAbonnement(genreID) .. ")")
+			debugMsg("Changing genre " ..genreID.. " abonnement level from " .. oldLevel .. " to " .. newSubscriptionLevels[genreID] .. " (new level=" .. TVT.ne_getNewsAbonnement(genreID) .. ")")
 		else
-			--debugMsg("- Keeping genre " ..genreID.. " abonnement level at " .. oldLevel)
+			--debugMsg("Keeping genre " ..genreID.. " abonnement level at " .. oldLevel)
 		end
 	end
 
-	local newFees = TVT.ne_getTotalNewsAbonnementFees()
+	-- update current fees
+	self.Task:UpdateNewsAbonnementFees()
+
 
 	-- subract new expenses
+	local newFees = self.Task.newsAbonnementTotalFees
 	if newFees ~= oldFees then
-		debugMsg("- Adjusted news budget by " .. (newFees - oldFees) .. ". CurrentBudget=" .. self.Task.CurrentBudget)
+		debugMsg("Adjusted news budget by " .. (newFees - oldFees) .. ". CurrentBudget=" .. self.Task.CurrentBudget)
 		self.Task.CurrentBudget = self.Task.CurrentBudget - (newFees - oldFees)
 	else
-		--debugMsg("- News budget stays the same. CurrentBudget=" .. self.Task.CurrentBudget)
+		--debugMsg("News budget stays the same. CurrentBudget=" .. self.Task.CurrentBudget)
 	end
 
 	self.Status = JOB_STATUS_DONE
 end
-
-
-function JobNewsAgencyAbonnements:GetAbonnementLevel(abonnementCount, dividend)
-	if (abonnementCount >= (dividend + 10)) then
-		return 3
-	elseif (abonnementCount >= (dividend + 5)) then
-		return 2
-	elseif (abonnementCount >= dividend) then
-		return 1
-	else
-		return 0
-	end
-end
 -- <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
 
 -- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _G["JobNewsAgency"] = class(AIJob, function(c)
@@ -278,27 +320,16 @@ _G["JobNewsAgency"] = class(AIJob, function(c)
 	c.Task = nil
 end)
 
+
 function JobNewsAgency:typename()
 	return "JobNewsAgency"
 end
 
+
 function JobNewsAgency:Prepare(pParams)
 	debugMsg("Search best news for news show")
-
-	-- RONNY 25.09.2016:
-	-- disabled, all news are now returned by
-	-- "GetNewsList()" and should be automatically removed from other
-	-- slots upon placement
-
-	-- instead of refreshing the news list each time we adjusted a slot
-	-- (which might add back a previously send news to the collection which
-	--  is still better than the other existing ones)
-	-- we just unset all news right before placing the best 3 of them
-
-	--TVT.ne_doRemoveNewsFromPlan(0, "")
-	--TVT.ne_doRemoveNewsFromPlan(1, "")
-	--TVT.ne_doRemoveNewsFromPlan(2, "")
 end
+
 
 function JobNewsAgency:Tick()
 	local price = 0
@@ -309,7 +340,7 @@ function JobNewsAgency:Tick()
 	local newsList = self.GetNewsList(0.2)
 
 	-- loop over all 3 slots
-	for slot=1,3,1 do
+	for slot=1,3 do
 		if (table.count(newsList) > 0) then
 			local selectedNews = nil
 
@@ -350,6 +381,10 @@ function JobNewsAgency:Tick()
 	self.Status = JOB_STATUS_DONE
 end
 
+
+-- retrieve a (attractivity sorted) list of news candidates
+-- paidBonus	defines bonus percentage to attractivity of already paid
+--              news
 function JobNewsAgency:GetNewsList(paidBonus)
 	local currentNewsList = {}
 
@@ -384,10 +419,18 @@ function JobNewsAgency:GetNewsList(paidBonus)
 
 
 	-- sort by attractivity modifed by paid-state-bonus
+	-- precache complex weight calculation
+	local weights = {}
+	for k,v in pairs(currentNewsList) do
+		weights[ v.GetID() ] = v.GetAttractiveness() * (1.0 + v.IsPaid() * paidBonus)
+	end
+
+	-- sort
 	local sortMethod = function(a, b)
-		return a.GetAttractiveness()*(1.0 + a.IsPaid()*paidBonus) > b.GetAttractiveness()*(1.0 + b.IsPaid()*paidBonus)
+		return weights[ a.GetID() ] > weights[ b.GetID() ]
 	end
 	table.sort(currentNewsList, sortMethod)
+
 
 	return currentNewsList
 end

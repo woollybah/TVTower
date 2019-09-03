@@ -61,10 +61,40 @@ Type TAi extends TAiBase
 	End Method
 
 
+	'override to additionally disable AI when game is paused
+	Method IsActive:int()
+		if not Super.IsActive() then return False
+
+		if GetGameBase().IsPaused() then return False
+
+		return True
+	End Method
+
+
 	'override
 	Method AddLog(title:string, text:string, logLevel:int)
 		Super.AddLog(title, text, logLevel)
 		AiLog[Self.playerID-1].AddLog(text, True)
+	End Method
+
+
+	Method CallAddEvent(eventName:string, args:object[])
+		Local luaArgs:Object[2]
+		luaArgs[0] = String(eventName)
+		luaArgs[1] = object(args)
+
+		CallLuaFunction("AddEvent", args)
+	End Method
+
+
+	Method CallGetEventCount:Int()
+		return int( string(CallLuaFunction("GetEventCount", Null)) )
+	End Method
+
+
+	Method CallUpdate()
+'auskommentiert bis reflection threadsafe
+'		CallLuaFunction("Update", Null)
 	End Method
 
 
@@ -152,7 +182,7 @@ Type TAi extends TAiBase
 		Local args:Object[1]
 		args[0] = string(GetWorldTime().GetTimeGone())
 
-		scriptSaveState = string(CallLuaFunction("OnSave", args))
+		scriptSaveState = String(CallLuaFunction("OnSave", args))
 	End Method
 
 
@@ -255,7 +285,7 @@ Type TAi extends TAiBase
 		Local args:Object[1]
 		args[0] = TAchievement(achievement)
 
-		CallLuaFunction("CallOnAchievementCompleted", args)
+		CallLuaFunction("OnAchievementCompleted", args)
 	End Method
 
 
@@ -265,7 +295,7 @@ Type TAi extends TAiBase
 		Local args:Object[1]
 		args[0] = TAward(award)
 
-		CallLuaFunction("CallOnWonAward", args)
+		CallLuaFunction("OnWonAward", args)
 	End Method
 
 
@@ -504,6 +534,31 @@ Type TLuaFunctions extends TLuaFunctionsBase {_exposeToLua}
 	End Method
 
 
+	Method PopNextEvent:TAIEvent()
+		print "PopNextEvent"
+		local aiE:TAIEvent = GetPlayerBase(Self.ME).PlayerAI.PopNextEvent()
+		if not aiE then print "PopNextEvent NULL"
+		if aiE then print "PopNextEvent OK"
+		Return aiE ' GetPlayerBase(Self.ME).PlayerAI.PopNextEvent()
+	End Method
+
+
+	Method GetNextEventCount:Int()
+		Return GetPlayerBase(Self.ME).PlayerAI.GetNextEventCount()
+	End Method
+
+
+	Method IsActive:Int()
+		Return GetPlayerBase(Self.ME).PlayerAI.IsActive()
+	End Method
+
+
+	'use this to send the threaded AI to sleep for a while
+	Method Sleep:Int(milliseconds:int)
+		Delay(milliseconds)
+	End Method
+
+
 	Method GetArchiveIdOfPlayer:Int(id:Int)
 		Return GetRoomCollection().GetFirstByDetails("", "archive", id).id
 	End Method
@@ -735,6 +790,13 @@ Type TLuaFunctions extends TLuaFunctionsBase {_exposeToLua}
 
 	'=== GENERIC INFORMATION RETRIEVERS ===
 	'player could eg. see in interface / tooltips
+	'or stuff "static" over the whole game - so during a second game this
+	'is known to a player (eg. fees for a news abonnement level)
+
+	Method GetNewsAbonnementFee:Int(newsGenreID:int, level:int)
+		return GetNewsAgency().GetNewsAbonnementPrice(self.ME, newsGenreID, level)
+	End Method
+
 
 	Method GetRoomBlockedTime:Long(roomID:int)
 		local room:TRoomBase = GetRoomBase(roomID)
@@ -788,6 +850,13 @@ Type TLuaFunctions extends TLuaFunctionsBase {_exposeToLua}
 		local bm:TBroadcastMaterial = GetPlayerProgrammePlan(self.ME).GetProgramme(day, hour)
 		if bm then return bm.GetGUID()
 		return ""
+	End Method
+
+
+	'helper
+	Method CreateBroadcastMaterialFromSource:TBroadcastMaterial(materialSource:TBroadcastMaterialSource)
+		'create a broadcast material out of the given source
+		Return GetPlayerProgrammeCollection(self.ME).GetBroadcastMaterial(materialSource)
 	End Method
 
 
@@ -850,6 +919,29 @@ endrem
 
 	'=== OFFICE ===
 	'players bureau
+
+
+	Method of_GetTemporaryCableNetworkUplinkStation:TStationBase(cableNetworkIndex:int)
+		If Not _PlayerInRoom("office") Then Return Null
+		Return GetStationMap(self.ME, True).GetTemporaryCableNetworkUplinkStation(cableNetworkIndex)
+	End Method
+
+	Method of_GetTemporaryAntennaStation:TStationBase(x:Int,y:Int)
+		If Not _PlayerInRoom("office") Then Return Null
+		Return GetStationMap(self.ME, True).GetTemporaryAntennaStation(x, y)
+	End Method
+
+	Method of_GetTemporarySatelliteUplinkStation:TStationBase(satelliteIndex:int)
+		If Not _PlayerInRoom("office") Then Return Null
+		Return GetStationMap(self.ME, True).GetTemporarySatelliteUplinkStation(satelliteIndex)
+	End Method
+
+	Method of_GetStationCosts:Int()
+		If Not _PlayerInRoom("office") Then Return self.RESULT_WRONGROOM
+		return GetStationMap(self.ME, True).CalculateStationCosts()
+	End Method
+
+
 	Method of_IsModifyableProgrammePlanSlot:int(slotType:int, day:int, hour:int)
 		If Not _PlayerInRoom("office") Then Return self.RESULT_WRONGROOM
 
@@ -1077,18 +1169,26 @@ endrem
 	'or of types: "TProgrammeLicence" or "TAdContract"
 	'returns: (TVT.)RESULT_OK, RESULT_WRONGROOM, RESULT_NOTFOUND
 	Method of_setAdvertisementSlot:Int(materialSource:object, day:Int=-1, hour:Int=-1)
-		If Not _PlayerInRoom("office") Then Return self.RESULT_WRONGROOM
+'		If Not _PlayerInRoom("office") Then Return self.RESULT_WRONGROOM
 		'even if player has access to room, only owner can manage things here
-		If Not _PlayerOwnsRoom() Then Return self.RESULT_WRONGROOM
+'		If Not _PlayerOwnsRoom() Then Return self.RESULT_WRONGROOM
 
+		local broadcastMaterial:TBroadcastMaterial
 		'create a broadcast material out of the given source
-		local broadcastMaterial:TBroadcastMaterial = GetPlayerProgrammeCollection(self.ME).GetBroadcastMaterial(materialSource)
-		if not broadcastMaterial then return self.RESULT_FAILED
+		if materialSource
+			broadcastMaterial = GetPlayerProgrammeCollection(self.ME).GetBroadcastMaterial(materialSource)
+			if not broadcastMaterial then return self.RESULT_FAILED
+		endif
 
 		'skip setting the slot if already done
 		Local existingMaterial:TBroadcastMaterial = GetPlayerProgrammePlan(self.ME).GetAdvertisement(day, hour)
-		if existingMaterial
+		if existingMaterial and broadcastMaterial
 			if broadcastMaterial.GetReferenceID() = existingMaterial.GetReferenceID() and broadcastMaterial.materialType = existingMaterial.materialType
+				return self.RESULT_SKIPPED
+			endif
+		else
+			'both empty
+			if not existingMaterial and not broadcastMaterial
 				return self.RESULT_SKIPPED
 			endif
 		endif
@@ -1178,10 +1278,10 @@ endrem
 	End Method
 
 
-	Method ne_getNewsAbonnementFee:Int(newsGenreID:int, level:int)
+	Method ne_getNewsAbonnementFee:Int(newsGenreID:int)
 		If Not (_PlayerInRoom("newsroom") or _PlayerInRoom("news")) Then Return self.RESULT_WRONGROOM
 
-		return GetNewsAgency().GetNewsAbonnementPrice(self.ME, newsGenreID, level)
+		return GetNewsAbonnementFee(newsGenreID, GetPlayerBase(self.ME).GetNewsAbonnement(newsGenreID))
 	End Method
 
 
@@ -1199,6 +1299,7 @@ endrem
 			return self.RESULT_OK
 		endif
 	End Method
+
 
 	'returns the aggression level of the given terrorist group.
 	'Invalid groups return the maximum of all.
@@ -1326,7 +1427,43 @@ endrem
 
 
 	'=== SPOT AGENCY ===
+	Method sa_getSignedAdContractCount:Int()
+		If Not _PlayerInRoom("adagency") Then Return self.RESULT_WRONGROOM
 
+		Return GetPlayerProgrammeCollection(Self.ME).GetAdContractCount()
+	End Method
+
+
+	Method sa_getSignedAdContracts:TLuaFunctionResult()
+		If Not _PlayerInRoom("adagency") Then Return TLuaFunctionResult.Create(self.RESULT_WRONGROOM, null)
+
+		local contracts:TAdContract[] = GetPlayerProgrammeCollection(self.ME).GetAdContractsArray()
+		If contracts
+			Return TLuaFunctionResult.Create(self.RESULT_OK, contracts)
+		else
+			Return TLuaFunctionResult.Create(self.RESULT_NOTFOUND, null)
+		endif
+	End Method
+
+
+
+	Method sa_getSignedAdContractAtIndex:TAdContract(arrayIndex:Int=-1)
+		If Not _PlayerInRoom("adagency") Then Return Null
+
+		Local obj:TAdContract = GetPlayerProgrammeCollection(self.ME).GetAdContractAtIndex(arrayIndex)
+		If obj Then Return obj Else Return Null
+	End Method
+
+
+	Method sa_getSignedAdContractByID:TAdContract(id:Int=-1)
+		If Not _PlayerInRoom("adagency") Then Return Null
+
+		Local obj:TAdContract = GetPlayerProgrammeCollection(self.ME).GetAdContract(id)
+		If obj Then Return obj Else Return Null
+	End Method
+
+
+	' spots from the vendor
 	Method sa_getSpotCount:Int()
 		If Not _PlayerInRoom("adagency") Then Return self.RESULT_WRONGROOM
 
@@ -1475,12 +1612,25 @@ endrem
 
 	'GET an auction programme block at the given array position
 	'Returns: TAuctionProgrammeBlocks
-	Method md_getAuctionMovieBlock:TAuctionProgrammeBlocks(ArrayID:Int = -1)
+	Method md_getAuctionProgrammeLicenceBlock:TAuctionProgrammeBlocks(ArrayID:Int = -1)
 		If Not _PlayerInRoom("movieagency") Then Return null
 		If ArrayID >= TAuctionProgrammeBlocks.List.Count() Or arrayID < 0 Then Return null
 
 		Local Block:TAuctionProgrammeBlocks = TAuctionProgrammeBlocks(TAuctionProgrammeBlocks.List.ValueAtIndex(ArrayID))
 		If Block and Block.GetLicence() Then Return Block Else Return null
+	End Method
+
+
+	Method md_getAuctionProgrammeLicenceBlockIndex:Int(licenceID:Int = -1)
+		If Not _PlayerInRoom("movieagency") Then Return null
+
+		Local block:TAuctionProgrammeBlocks
+		For local i:int = 0 until TAuctionProgrammeBlocks.List.Count()
+			block = TAuctionProgrammeBlocks(TAuctionProgrammeBlocks.List.ValueAtIndex(i))
+ 			If block.GetLicence() and block.licence.GetReferenceID() = licenceID Then Return i
+		Next
+
+		Return self.RESULT_NOTFOUND
 	End Method
 
 
@@ -1497,7 +1647,7 @@ endrem
 		endif
 	End Method
 
-'untested
+
 	Method md_getAuctionProgrammeLicenceCount:Int()
 		If Not _PlayerInRoom("movieagency") Then Return self.RESULT_WRONGROOM
 
@@ -1507,7 +1657,6 @@ endrem
 
 	Method md_doBidAuctionProgrammeLicence:Int(licenceID:int= -1)
 		If Not _PlayerInRoom("movieagency") Then Return self.RESULT_WRONGROOM
-
 
 		For local Block:TAuctionProgrammeBlocks = EachIn TAuctionProgrammeBlocks.List
 			If Block.GetLicence() and Block.licence.GetReferenceID() = licenceID Then Return Block.SetBid( self.ME )
@@ -1520,23 +1669,23 @@ endrem
 	Method md_doBidAuctionProgrammeLicenceAtIndex:Int(ArrayID:int= -1)
 		If Not _PlayerInRoom("movieagency") Then Return self.RESULT_WRONGROOM
 
-		local Block:TAuctionProgrammeBlocks = self.md_getAuctionMovieBlock(ArrayID)
+		local Block:TAuctionProgrammeBlocks = self.md_getAuctionProgrammeLicenceBlock(ArrayID)
 		If Block and Block.GetLicence() then Return Block.SetBid( self.ME ) else Return self.RESULT_NOTFOUND
 	End Method
 
-'untested
+
 	Method md_GetAuctionProgrammeLicenceNextBid:Int(ArrayID:int= -1)
 		If Not _PlayerInRoom("movieagency") Then Return self.RESULT_WRONGROOM
 
-		local Block:TAuctionProgrammeBlocks = self.md_getAuctionMovieBlock(ArrayID)
+		local Block:TAuctionProgrammeBlocks = self.md_getAuctionProgrammeLicenceBlock(ArrayID)
 		If Block and Block.GetLicence() then Return Block.GetNextBid(self.ME) else Return self.RESULT_NOTFOUND
 	End Method
 
-'untested
+
 	Method md_GetAuctionProgrammeLicenceHighestBidder:Int(ArrayID:int= -1)
 		If Not _PlayerInRoom("movieagency") Then Return self.RESULT_WRONGROOM
 
-		local Block:TAuctionProgrammeBlocks = self.md_getAuctionMovieBlock(ArrayID)
+		local Block:TAuctionProgrammeBlocks = self.md_getAuctionProgrammeLicenceBlock(ArrayID)
 		If Block and Block.GetLicence() then Return Block.bestBidder else Return self.RESULT_NOTFOUND
 	End Method
 
@@ -1577,7 +1726,7 @@ endrem
 	Method bo_doRepayCredit:int(amount:int)
 		If Not _PlayerInRoom("boss") Then Return self.RESULT_WRONGROOM
 
-		if GetPlayerBoss(self.ME).PlayerTakesCredit(amount)
+		if GetPlayerBoss(self.ME).PlayerRepaysCredit(amount)
 			return True
 		else
 			return self.RESULT_FAILED

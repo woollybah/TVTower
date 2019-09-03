@@ -205,7 +205,7 @@ Type TgfxContractlist Extends TPlannerList
 					font.drawBlock(contract.GetTitle(), currX + 22, currY + 3, 150,15, ALIGN_LEFT_CENTER, TColor.clBlack ,0, True, 1.0, False)
 				endif
 
-				if contract.GetLimitedToTargetGroup() > 0 or contract.GetLimitedToGenre() > 0 or contract.GetLimitedToProgrammeFlag() > 0
+				if contract.GetLimitedToTargetGroup() > 0 or contract.GetLimitedToProgrammeGenre() > 0 or contract.GetLimitedToProgrammeFlag() > 0
 					GetSpriteFromRegistry("gfx_programmetape_stamp_attention").draw(currX + 8, currY+1)
 				endif
 			EndIf
@@ -262,9 +262,12 @@ Type TgfxContractlist Extends TPlannerList
 					GetGameBase().cursorstate = 1
 					'only interact if allowed
 					If clicksAllowed
-						If MOUSEMANAGER.IsShortClicked(1)
+						If MOUSEMANAGER.IsClicked(1)
 							New TGUIProgrammePlanElement.CreateWithBroadcastMaterial( New TAdvertisement.Create(contract), "programmePlanner" ).drag()
-							MOUSEMANAGER.resetKey(1)
+
+							'handled single click
+							MouseManager.ResetClicked(1)
+
 							SetOpen(0)
 						EndIf
 					EndIf
@@ -286,15 +289,17 @@ Type TgfxContractlist Extends TPlannerList
 		If openState > 0 and (MOUSEMANAGER.IsClicked(2) or MouseManager.IsLongClicked(1))
 			SetOpen( Max(0, openState - 1) )
 
-			MOUSEMANAGER.resetKey(2)
-			MOUSEMANAGER.resetKey(1) 'also normal clicks
+			MouseManager.ResetClicked(2)
+			MouseManager.ResetLongClicked(1)
 		EndIf
 
 		'close if mouse hit outside - simple mode: so big rect
-		If MouseManager.IsHit(1)
+		If MouseManager.IsClicked(1)
 			If Not GetEntriesRect().containsXY(MouseManager.x, MouseManager.y)
 				SetOpen(0)
-				'MouseManager.ResetKey(1)
+
+				'handled single click
+				MouseManager.ResetClicked(1)
 			EndIf
 		EndIf
 	End Method

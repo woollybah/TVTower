@@ -213,7 +213,9 @@ Type TScreenHandler_OfficeAchievements extends TScreenHandler
 						showCategory = TVTAchievementCategory.GetAtIndex(i)
 						showCategoryIndex = i
 						ReloadAchievements()
-						MouseManager.ResetKey(1)
+
+						'handled left click
+						MouseManager.ResetClicked(1)
 					endif
 				endif
 			Next
@@ -225,6 +227,8 @@ Type TScreenHandler_OfficeAchievements extends TScreenHandler
 		if (MouseManager.IsClicked(2) or MouseManager.IsLongClicked(1))
 			'leaving room now
 			RemoveAllGuiElements()
+
+			'no mouse reset - we still want to leave the room
 		endif
 	End Method
 

@@ -457,6 +457,9 @@ End Function
 Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"}
 	'wird nur in der Lua-KI verwendet um die Lizenzen zu bewerten
 	Field attractiveness:Float = -1
+	'maxTopicality when buying/receiving a licence
+	'used to calculate loss of maxTopicality since owning
+	Field maxTopicalityOnOwnerchange:Float = -1.0
 	Field data:TProgrammeData				{_exposeToLua}
 	'the latest hour-(from-start) one of the planned programmes ends
 	Field latestPlannedEndHour:int = -1
@@ -486,9 +489,16 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 '	Field cacheTextOverlay:TImage 			{nosave}
 '	Field cacheTextOverlayMode:string = ""	{nosave}	'for which mode the text was cached
 
+	Global modKeyAuctionPriceLS:TLowerString = New TLowerString.Create("auctionPrice")
+
 
 	Method GenerateGUID:string()
 		return "broadcastmaterialsource-programmelicence-"+id
+	End Method
+
+
+	Method GetMaterialSourceType:Int() {_exposeToLua}
+		return TVTBroadcastMaterialSourceType.PROGRAMMELICENCE
 	End Method
 
 
@@ -739,13 +749,48 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 		if GetSubLicenceCount() = 0 and GetData()
 			return data.IsLive()
 		endif
-		'is live as soon as one licence is still live
+		'is live as soon as one sub-licence is still live
 		For local licence:TProgrammeLicence = eachin subLicences
 			if licence.isLive() then return True
 		Next
 		return False
 	End Method
 
+
+	Method isXRated:int() {_exposeToLua}
+		if GetSubLicenceCount() = 0 and GetData()
+			return data.IsXRated()
+		endif
+		'is live as soon as one sub-licence is still live
+		For local licence:TProgrammeLicence = eachin subLicences
+			if licence.IsXRated() then return True
+		Next
+		return False
+	End Method
+
+
+	Method isLiveOnTape:int() {_exposeToLua}
+		if GetSubLicenceCount() = 0 and GetData()
+			return data.IsLiveOnTape()
+		endif
+		'is live-on-tape as soon as one sub-licence is (already) live-on-tape
+		For local licence:TProgrammeLicence = eachin subLicences
+			if licence.IsLiveOnTape() then return True
+		Next
+		return False
+	End Method
+
+
+	Method isPaid:int() {_exposeToLua}
+		if GetSubLicenceCount() = 0 and GetData()
+			return data.IsPaid()
+		endif
+		'is paid as soon as one sub-licence is paid
+		For local licence:TProgrammeLicence = eachin subLicences
+			if licence.ispaid() then return True
+		Next
+		return False
+	End Method
 
 
 	Method isSeries:int() {_exposeToLua}
@@ -783,6 +828,9 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 		if owner <> self.owner
 			'remove old trailer data
 			data.RemoveTrailerMod(self.owner)
+
+			'fetch original maxTopicality
+			maxTopicalityOnOwnerchange = GetMaxTopicality()
 		endif
 
 		self.owner = owner
@@ -1174,7 +1222,7 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 
 		'check live-programme
 		if broadcastType = TVTBroadcastMaterialType.PROGRAMME
-			if data.IsLive()
+			if self.IsLive()
 				'hour or day incorrect
 				if GameRules.onlyExactLiveProgrammeTimeAllowedInProgrammePlan
 					if GetWorldTime().GetDayHour( data.releaseTime ) <> hour then return False
@@ -1503,6 +1551,7 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 	End Method
 
 
+	'override
 	Method GetQuality:Float() {_exposeToLua}
 		'single-licence
 		if GetSubLicenceCount() = 0 and GetData() then return GetData().GetQuality()
@@ -1683,7 +1732,10 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 
 	'returns the (avg) relative topicality of a licence (package)
 	Method GetRelativeTopicality:Float() {_exposeToLua}
-		return GetTopicality() / GetMaxTopicality()
+		local mTopicality:Float = GetMaxTopicality()
+		if mTopicality = 0 then return 0
+
+		return GetTopicality() / mTopicality
 	End Method
 
 
@@ -1729,6 +1781,30 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 	End Method
 
 
+	Method GetMaxTopicalityOnOwnerChange:Float() {_exposeToLua}
+		'single-licence
+		if GetSubLicenceCount() = 0
+			if maxTopicalityOnOwnerchange < 0 then maxTopicalityOnOwnerchange = GetMaxTopicality()
+			return maxTopicalityOnOwnerchange
+		endif
+
+		'licence for a package or series
+		Local value:Float
+		For local licence:TProgrammeLicence = eachin subLicences
+			value :+ licence.GetMaxTopicalityOnOwnerChange()
+		Next
+
+		if subLicences.length > 0 then return value / subLicences.length
+		return 0.0
+	End Method
+
+
+	'returns the avg left maxTopicality compared to when bough/received
+	Method GetRelativeMaxTopicalityLoss:Float() {_exposeToLua}
+		return 1.0 - (GetMaxTopicality() / GetMaxTopicalityOnOwnerChange())
+	End Method
+
+
 	Method GetAudienceReachLevelPriceMod:Float(audienceReachLevel:int)
 		return (0.5*Max(1, audienceReachLevel))
 	End Method
@@ -1751,12 +1827,12 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 
 		'=== INDIVIDUAL PRICE ===
 		'individual licence price mod (eg. "special collection discount")
-		value :* GetModifier("price")
+		value :* GetModifier(modKeyPriceLS)
 
 		'=== AUCTION PRICE ===
 		'if this licence was won in an auction, this price is modifying
 		'the real one
-		value :* GetModifier("auctionPrice")
+		value :* GetModifier(modKeyAuctionPriceLS)
 
 		'=== DIFFICULTY ===
 		'eg. "auctions" set this flag
@@ -1839,12 +1915,12 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 
 		'=== INDIVIDUAL PRICE ===
 		'individual licence price mod (eg. "special collection discount")
-		value :* GetModifier("price")
+		value :* GetModifier(modKeyPriceLS)
 
 		'=== AUCTION PRICE ===
 		'if this licence was won in an auction, this price is modifying
 		'the real one
-		value :* GetModifier("auctionPrice")
+		value :* GetModifier(modKeyAuctionPriceLS)
 
 		'=== DIFFICULTY ===
 		'eg. "auctions" set this flag
@@ -1869,7 +1945,7 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 	End Method
 
 
-	Method GetTimesBroadcasted:int(owner:int = -1)
+	Method GetTimesBroadcasted:int(owner:int = -1) {_exposeToLua}
 		if GetSubLicenceCount() = 0 then return data.GetTimesBroadcasted(owner)
 
 		local sum:int = 0
@@ -1982,8 +2058,23 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 		if useOwner > 0 and self.IsPlanned() then showMsgPlannedWarning = True
 		'if licence is for a specific programme it might contain a flag...
 		'TODO: do this for "all" via licence.HasFlag() doing recursive checks?
-		If data.IsPaid() then showMsgEarnInfo = True
-		If IsLive() or data.IsLiveOnTape()
+		If self.IsPaid() then showMsgEarnInfo = True
+
+		'always show live info text - regardless of situation ?!
+		local nextReleaseTime:Long
+		If self.IsLive()
+			local nextReleaseTime:Long = GetNextReleaseTime()
+			if nextReleaseTime = -1 then nextReleaseTime = data.GetReleaseTime()
+
+			'release time might be in the past if the live programme is airing
+			'now (so it is "live" but start was in the past)
+			if nextReleaseTime < GetWorldTime().GetTimeGone()
+				showMsgLiveInfo = False
+			else
+				showMsgLiveInfo = True
+			endif
+		Rem
+		If self.IsLive() or self.IsLiveOnTape()
 			local programmedDay:int = -1
 			local programmedHour:int = -1
 			if extraData
@@ -2019,7 +2110,7 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 					endif
 				endif
 			endif
-
+		EndRem
 		endif
 		If HasBroadcastLimit() then showMsgBroadcastLimit= True
 		If HasBroadcastTimeSlot() then showMsgBroadcastTimeSlot= True
@@ -2080,9 +2171,13 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 
 
 		'=== SUBTITLE AREA ===
-		if isSeries() or isCollection()
+		if isSeries()
 			skin.RenderContent(contentX, contentY, contentW, subtitleH, "1")
 			skin.fontNormal.drawBlock(GetLocale("SERIES_WITH_X_EPISODES").Replace("%EPISODESCOUNT%", GetEpisodeCount()), contentX + 5, contentY, contentW - 10, genreH -1, ALIGN_LEFT_CENTER, skin.textColorNeutral, 0,1,1.0,True, True)
+			contentY :+ subtitleH
+		elseif isCollection()
+			skin.RenderContent(contentX, contentY, contentW, subtitleH, "1")
+			skin.fontNormal.drawBlock(GetLocale("COLLECTION_WITH_X_ELEMENTS").Replace("%X%", GetEpisodeCount()), contentX + 5, contentY, contentW - 10, genreH -1, ALIGN_LEFT_CENTER, skin.textColorNeutral, 0,1,1.0,True, True)
 			contentY :+ subtitleH
 		elseif isEpisode() or isCollectionElement()
 			skin.RenderContent(contentX, contentY, contentW, subtitleH, "1")
@@ -2175,7 +2270,7 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 			'use a different text color if tv-outcome is not calculated
 			'yet
 			if GetOutcomeTV() < 0
-				skin.fontSemiBold.drawBlock(GetLocale("MOVIE_TVAUDIENCE"), contentX + 5 + 200 + 5, contentY, 75, 15, null, new TColor.Create(180,50,50))
+				skin.fontSemiBold.drawBlock(GetLocale("MOVIE_TVAUDIENCE"), contentX + 5 + 200 + 5, contentY, 75, 15, null, TColor.Create(180,50,50))
 			else
 				skin.fontSemiBold.drawBlock(GetLocale("MOVIE_TVAUDIENCE"), contentX + 5 + 200 + 5, contentY, 75, 15, null, skin.textColorLabel)
 			endif
@@ -2196,8 +2291,6 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 
 		If showMsgLiveInfo
 			local time:string = ""
-			local nextReleaseTime:Long = GetNextReleaseTime()
-			if nextReleaseTime = -1 then nextReleaseTime = data.GetReleaseTime()
 			local days:int = GetWorldTime().GetDay( nextReleaseTime ) - GetWorldTime().GetDay()
 
 			if days = 0
@@ -2331,7 +2424,7 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 			contentY :+ 12
 			skin.fontNormal.draw("TV-Kasse: "+MathHelper.NumberToString(data.GetOutcomeTV(), 4), contentX + 5, contentY)
 			contentY :+ 12
-			skin.fontNormal.draw("Preismodifikator:  Lizenz="+MathHelper.NumberToString(GetModifier("price"), 4)+"  Data="+MathHelper.NumberToString(data.GetModifier("price"), 4), contentX + 5, contentY)
+			skin.fontNormal.draw("Preismodifikator:  Lizenz="+MathHelper.NumberToString(GetModifier(modKeyPriceLS), 4)+"  Data="+MathHelper.NumberToString(data.GetModifier(modKeyPriceLS), 4), contentX + 5, contentY)
 			contentY :+ 12
 			skin.fontNormal.draw("Qualitaet roh: "+MathHelper.NumberToString(GetQualityRaw(), 4)+"  (ohne Alter, Wdh.)", contentX + 5, contentY)
 			contentY :+ 12
@@ -2356,6 +2449,8 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 				contentY :+ 12
 				local titleW:int = skin.fontNormal.draw("TrailerMod:", contentX + 5, contentY).GetX()
 				skin.fontNormal.drawBlock(data.GetTrailerMod(useOwner).ToStringPercentage(2), contentX + 5 + titleW + 5, contentY, contentW - titleW - 5 - 5, 60)
+				'2 lines of output...
+				contentY :+ 12
 			endif
 
 			if TSportsProgrammeData(data)
@@ -2369,7 +2464,7 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 		skin.RenderBorder(x, y, sheetWidth, sheetHeight)
 
 		'=== X-Rated Overlay ===
-		If data.IsXRated()
+		If IsXRated()
 			GetSpriteFromRegistry("gfx_datasheet_overlay_xrated").Draw(contentX + sheetWidth, y, -1, ALIGN_RIGHT_TOP)
 		Endif
 	End Method
@@ -2496,38 +2591,9 @@ Type TProgrammeLicence Extends TBroadcastMaterialSource {_exposeToLua="selected"
 
 
 	'Wird bisher nur in der LUA-KI verwendet
-	Method GetPricePerBlock:Int(broadcastType:int) {_exposeToLua}
+	Method GetPricePerBlock:Int(playerID:int, broadcastType:int) {_exposeToLua}
 		if broadcastType = 0 then broadcastType = TVTBroadcastMaterialType.PROGRAMME
-		return GetPriceForPlayer(owner) / GetBlocksTotal(broadcastType)
-	End Method
-
-
-	'Wird bisher nur in der LUA-KI verwendet
-	Method GetQualityLevel:Int() {_exposeToLua}
-		'single-licence
-		if GetSubLicenceCount() = 0 and GetData()
-			Local quality:Int = Self.GetData().GetQuality() * 100
-			If quality > 20
-				Return 5
-			ElseIf quality > 15
-				Return 4
-			ElseIf quality > 10
-				Return 3
-			ElseIf quality > 5
-				Return 2
-			Else
-				Return 1
-			EndIf
-		endif
-
-		'if licence is a collection: ask subs
-		local quality:int = 0
-		For local licence:TProgrammeLicence = eachin subLicences
-			quality :+ licence.GetQualityLevel()
-		Next
-
-		if subLicences.length > 0 then return quality / subLicences.length
-		return 1
+		return GetPriceForPlayer(playerID) / GetBlocksTotal(broadcastType)
 	End Method
 	'===== END AI-LUA HELPER FUNCTIONS =====
 End Type

@@ -26,8 +26,8 @@ Type RoomHandler_News extends TRoomHandler
 	Global hoveredGuiNews:TGuiNews = null
 
 	'sorting
-	Global ListSortMode:int = 0
-	Global ListSortOrder:int = 0
+	Field ListSortMode:int = 0
+	Field ListSortInAscendingOrder:int = True
 	Global ListSortVisible:int = False
 	Global sortButtonPos:TVec2D = new TVec2D.Init(373,2)
 	Global newsSortKeys:int[] = [0,1,2,3]
@@ -69,13 +69,13 @@ Type RoomHandler_News extends TRoomHandler
 
 		Select GameRules.newsStudioSortNewsBy
 			case "price"
-				ListSortMode = SORT_BY_PRICE
+				SetAvailableNewsListSort(SORT_BY_PRICE)
 			case "topicality"
-				ListSortMode = SORT_BY_TOPICALITY
+				SetAvailableNewsListSort(SORT_BY_TOPICALITY)
 			case "paid"
-				ListSortMode = SORT_BY_PAID
+				SetAvailableNewsListSort(SORT_BY_PAID)
 			default
-				ListSortMode = SORT_BY_AGE
+				SetAvailableNewsListSort(SORT_BY_AGE)
 		End Select
 
 
@@ -125,7 +125,9 @@ Type RoomHandler_News extends TRoomHandler
 			guiNewsListAvailable = new TGUINewsList.Create(new TVec2D.Init(14,13), new TVec2D.Init(GetSpriteFromRegistry("gfx_news_sheet0").area.GetW(), 4*GetSpriteFromRegistry("gfx_news_sheet0").area.GetH()), "Newsplanner")
 			guiNewsListAvailable.SetAcceptDrop("TGUINews")
 			'use a custom sort
-			guiNewsListAvailable.SetAutosortItems(False)
+'HEUTE
+'			guiNewsListAvailable.SetAutosortItems(False)
+			guiNewsListAvailable._autoSortFunction = TNews.SortByPublishedDate
 
 			guiNewsListAvailable.Resize(guiNewsListAvailable.rect.GetW() + guiNewsListAvailable.guiScrollerV.rect.GetW() + 8,guiNewsListAvailable.rect.GetH())
 			guiNewsListAvailable.guiEntriesPanel.minSize.SetXY(GetSpriteFromRegistry("gfx_news_sheet0").area.GetW(),356)
@@ -253,6 +255,35 @@ Type RoomHandler_News extends TRoomHandler
 	End Function
 
 
+	'this sorts the news list and recreates the gui
+	Method SetAvailableNewsListSort(sortMode:int, sortInAscendingOrder:int = True)
+		if guiNewsListAvailable
+
+			guiNewsListAvailable._autoSortInAscendingOrder = ListSortInAscendingOrder
+			Select sortMode
+				Case SORT_BY_AGE
+					guiNewsListAvailable._autoSortFunction = SortListItemByPublishedDate
+				Case SORT_BY_PRICE
+					guiNewsListAvailable._autoSortFunction = SortListItemByPrice
+				Case SORT_BY_PAID
+					guiNewsListAvailable._autoSortFunction = SortListItemByIsPaid
+				Case SORT_BY_TOPICALITY
+					guiNewsListAvailable._autoSortFunction = SortListItemByTopicality
+				default
+					guiNewsListAvailable._autoSortFunction = SortListItemByPublishedDate
+			End select
+
+			if ListSortMode <> sortMode or ListSortInAscendingOrder <> sortInAscendingOrder
+				RemoveAllGuiElements()
+				RefreshGUIElements()
+			endif
+		endif
+
+		ListSortMode = sortMode
+		ListSortInAscendingOrder = sortInAscendingOrder
+	End Method
+
+
 	Method onSaveGameBeginLoad:int( triggerEvent:TEventBase )
 		'for further explanation of this, check
 		'RoomHandler_Office.onSaveGameBeginLoad()
@@ -342,17 +373,16 @@ Type RoomHandler_News extends TRoomHandler
 		if not IsPlayersRoom(room) then return False
 
 		'pinwall
-		if not MouseManager.IsLongClicked(1)
-			If THelper.MouseIn(167,60,240,160)
-				If not PlannerToolTip Then PlannerToolTip = TTooltip.Create(GetLocale("ROOM_NEWSPLANNER"), GetLocale("MANAGE_BROADCASTED_NEWS"), 180, 100, 0, 0)
-				PlannerToolTip.enabled = 1
-				PlannerToolTip.Hover()
-				GetGameBase().cursorstate = 1
-				If MOUSEMANAGER.IsClicked(1)
-					MOUSEMANAGER.resetKey(1)
-					GetGameBase().cursorstate = 0
-					ScreenCollection.GoToSubScreen("screen_newsstudio_newsplanner")
-				endif
+		If THelper.MouseIn(167,60,240,160)
+			If not PlannerToolTip Then PlannerToolTip = TTooltip.Create(GetLocale("ROOM_NEWSPLANNER"), GetLocale("MANAGE_BROADCASTED_NEWS"), 180, 100, 0, 0)
+			PlannerToolTip.enabled = 1
+			PlannerToolTip.Hover()
+			GetGameBase().cursorstate = 1
+			If MouseManager.IsClicked(1)
+				'handled left click
+				MouseManager.ResetClicked(1)
+				GetGameBase().cursorstate = 0
+				ScreenCollection.GoToSubScreen("screen_newsstudio_newsplanner")
 			endif
 		endif
 	End Function
@@ -491,22 +521,20 @@ Type RoomHandler_News extends TRoomHandler
 			if THelper.MouseIn(sortButtonPos.GetIntX(), sortButtonPos.GetIntY(), boxWidth, boxHeight)
 				ListSortVisible = True
 
-				if MouseManager.isShortClicked(1)
-
+				if MouseManager.isClicked(1)
 					For local i:int = 0 to newsSortKeys.length-1
-						If THelper.MouseIn(contentX + i*32, sortButtonPos.GetIntY() + 7, 28, 27)
+						If THelper.MouseIn(contentX + 5 + i*32, sortButtonPos.GetIntY() + 12, 28, 27)
 							'sort now
-							if ListSortMode <> newsSortKeys[i]
-								ListSortMode = newsSortKeys[i]
-								ListSortOrder = True
-								'this sorts the news list and recreates
-								'the gui
-								ResetNewsOrder()
+							if GetInstance().ListSortMode <> newsSortKeys[i]
+								GetInstance().SetAvailableNewsListSort(newsSortKeys[i], True)
 							else
 								'switch order
-								ListSortOrder = not ListSortOrder
-								ResetNewsOrder()
+								GetInstance().SetAvailableNewsListSort(GetInstance().ListSortMode, not GetInstance().ListSortInAscendingOrder)
 							endif
+
+							'handled click
+							MouseManager.ResetClicked(1)
+							exit
 						endif
 					Next
 				endif
@@ -566,11 +594,13 @@ Type RoomHandler_News extends TRoomHandler
 
 		SetColor 255,255,255  'normal
 
-		GUIManager.Draw( LS_newsplanner )
+		If not draggedGuiNews
+			GUIManager.Draw( LS_newsplanner )
+		endif
 
 		local availableSortKeys:int[]
 		if not ListSortVisible
-			availableSortKeys :+ [ListSortMode]
+			availableSortKeys :+ [GetInstance().ListSortMode]
 		else
 			availableSortKeys :+ newsSortKeys
 		endif
@@ -584,7 +614,7 @@ Type RoomHandler_News extends TRoomHandler
 
 		For local i:int = 0 until availableSortKeys.length
 			local spriteName:string = "gfx_gui_button.datasheet"
-			if ListSortMode = availableSortKeys[i]
+			if GetInstance().ListSortMode = availableSortKeys[i]
 				spriteName = "gfx_gui_button.datasheet.positive"
 			endif
 
@@ -604,6 +634,12 @@ Type RoomHandler_News extends TRoomHandler
 				newsSortKeysTooltips[availableSortKeys[i]].Render()
 			endif
 		Next
+
+		'if there are dragged ones - draw ALL after sort widget
+		If draggedGuiNews
+			GUIManager.Draw( LS_newsplanner )
+		endif
+
 
 
 		if draggedGuiNews
@@ -641,60 +677,35 @@ Type RoomHandler_News extends TRoomHandler
 		'only adjust GUI if we are displaying that screen (eg. AI skips that)
 		If not IsMyScreen( ScreenCollection.GetCurrentScreen() ) Then Return False
 
+		'correct order - and set back scroll state
+		local oldScrollY:float = guiNewsListAvailable.GetScrollPercentageY()
+
 		'our plan?
 		'something changed -- refresh  gui elements
 		RefreshGuiElements()
+
+		guiNewsListAvailable.SetScrollPercentageY(oldScrollY)
+		guiNewsListAvailable.guiScrollerV.SetRelativeValue( oldScrollY )
 	End Function
 
 
-	Function SortNews(list:TList, mode:int = -1)
+	Function SortNewsList(list:TList, mode:int = -1)
 		if not list then return
 
-		if mode = -1 then mode = ListSortMode
+		if mode = -1 then mode = GetInstance().ListSortMode
 
-		Select ListSortMode
+		Select mode
 			Case SORT_BY_AGE
-				list.sort(ListSortOrder, TNews.SortByPublishedDate)
+				list.sort(GetInstance().ListSortInAscendingOrder, TNews.SortByPublishedDate)
 			Case SORT_BY_PRICE
-				list.sort(1 - ListSortOrder, TNews.SortByPrice)
+				list.sort(not GetInstance().ListSortInAscendingOrder, TNews.SortByPrice)
 			Case SORT_BY_PAID
-				list.sort(1 - ListSortOrder, TNews.SortByIsPaid)
+				list.sort(not GetInstance().ListSortInAscendingOrder, TNews.SortByIsPaid)
 			Case SORT_BY_TOPICALITY
-				list.sort(1 - ListSortOrder, TNews.SortByTopicality)
+				list.sort(not GetInstance().ListSortInAscendingOrder, TNews.SortByTopicality)
 			default
-				list.sort(ListSortOrder, TNews.SortByPublishedDate)
+				list.sort(GetInstance().ListSortInAscendingOrder, TNews.SortByPublishedDate)
 		End select
-	End Function
-
-
-	Function ResetNewsOrder:int()
-		local room:TRoom = currentRoom
-		if not room then return 0
-
-
-		RemoveAllGuiElements()
-
-		local newsList:TList = CreateList()
-
-		For Local news:TNews = EachIn GetPlayerProgrammeCollection(room.owner).news
-			'skip if news is dragged
-			if draggedGuiNews and draggedGuiNews.news = news then continue
-			'skip if planned
-			if GetPlayerProgrammePlan(room.owner).HasNews(news) then continue
-
-			newsList.AddLast(news)
-		Next
-
-		SortNews(newsList, ListSortMode)
-
-		'add again - so it gets sorted
-		For local news:TNews = eachin newsList
-			local guiNews:TGUINews = new TGUINews.Create(null,null, news.GetTitle())
-			guiNews.SetNews(news)
-			guiNewsListAvailable.AddItem(guiNews)
-		Next
-
-		'RemoveAllGuiElements()
 	End Function
 
 
@@ -765,6 +776,8 @@ Type RoomHandler_News extends TRoomHandler
 				endif
 			endif
 		Next
+
+
 		For Local i:int = 0 to GetPlayerProgrammePlan(owner).news.length - 1
 			local news:TNews = TNews(GetPlayerProgrammePlan(owner).GetNewsAtIndex(i))
 			'skip if news is dragged
@@ -779,6 +792,43 @@ Type RoomHandler_News extends TRoomHandler
 
 		haveToRefreshGuiElements = FALSE
 	End Function
+
+
+
+	Function SortListItemByName:Int(o1:Object, o2:Object)
+		if not TGUINews(o1) Then Return -1
+		if not TGUINews(o2) Then Return 1
+		return TGUINews(o1).news.CompareByName(TGUINews(o2).news)
+	End Function
+
+
+	Function SortListItemByPrice:Int(o1:Object, o2:Object)
+		if not TGUINews(o1) Then Return -1
+		if not TGUINews(o2) Then Return 1
+		Return TGUINews(o1).news.CompareByPrice(TGUINews(o2).news)
+	End Function
+
+
+	Function SortListItemByPublishedDate:Int(o1:Object, o2:Object)
+		if not TGUINews(o1) Then Return -1
+		if not TGUINews(o2) Then Return 1
+		Return TGUINews(o1).news.CompareByPublishedDate(TGUINews(o2).news)
+	End Function
+
+
+	Function SortListItemByIsPaid:Int(o1:Object, o2:Object)
+		if not TGUINews(o1) Then Return -1
+		if not TGUINews(o2) Then Return 1
+		Return TGUINews(o1).news.CompareByIsPaid(TGUINews(o2).news)
+	End Function
+
+
+	Function SortListItemByTopicality:Int(o1:Object, o2:Object)
+		if not TGUINews(o1) Then Return -1
+		if not TGUINews(o2) Then Return 1
+		Return TGUINews(o1).news.CompareByTopicality(TGUINews(o2).news)
+	End Function
+
 
 
 	'we need to know whether we dragged or hovered an item - so we
@@ -825,8 +875,9 @@ Type RoomHandler_News extends TRoomHandler
 		guiNews.remove()
 		guiNews = null
 
+		'avoid clicks
 		'remove right click - to avoid leaving the room
-		MouseManager.ResetKey(2)
+		MouseManager.ResetClicked(2)
 		'also avoid long click (touch screen)
 		MouseManager.ResetLongClicked(1)
 	End Function
@@ -941,6 +992,8 @@ Type TGUINews Extends TGUIGameListItem
 	Field news:TNews = Null
 	Field imageBaseName:String = "gfx_news_sheet"
 	Field cacheTextOverlay:TImage
+	Global sortMode:int
+	Global sortModeOrder:int = 0
 
 
 	Method New()
@@ -953,6 +1006,7 @@ Type TGUINews Extends TGUIGameListItem
 
 		Return Self
 	End Method
+
 
 	Method SetNews:Int(news:TNews)
 		Self.news = news
@@ -981,6 +1035,21 @@ Type TGUINews Extends TGUIGameListItem
 			EndIf
 
 			If Self.news And otherBlock.news
+rem
+				local orderMulti:int = 1
+				if sortModeOrder = 1 then orderMulti = -1
+				Select sortMode
+					case RoomHandler_News.SORT_BY_PRICE
+						Return news.CompareByPrice(otherBlock.news) * -1 * orderMulti
+					case RoomHandler_News.SORT_BY_TOPICALITY
+						Return news.CompareByTopicality(otherBlock.news) * -1 * orderMulti
+					case RoomHandler_News.SORT_BY_PAID
+						Return news.CompareByIsPaid(otherBlock.news) * orderMulti
+					default 'RoomHandler_News.SORT_BY_AGE
+						Return news.CompareByPublishedDate(otherBlock.news) * -1 * orderMulti
+				End Select
+endrem
+'rem
 				Local publishDifference:Int = Self.news.GetPublishTime() - otherBlock.news.GetPublishTime()
 
 				'self is newer ("later") than other
@@ -989,6 +1058,7 @@ Type TGUINews Extends TGUIGameListItem
 				If publishDifference<0 Then Return 1
 				'self is same age than other
 				If publishDifference=0 Then Return Super.Compare(Other)
+'endrem
 			EndIf
 		EndIf
 
@@ -1140,7 +1210,7 @@ Type TGUINews Extends TGUIGameListItem
 			textY :+ 12
 			fontNormal.draw("GUID: " + news.newsEvent.GetGUID(), screenX + 5, textY)
 			textY :+ 11
-			fontNormal.draw("Preis: " + news.GetPrice(GetPlayerBaseCollection().playerID)+"  (PreisMod: "+MathHelper.NumberToString(news.newsEvent.GetModifier("price"),4)+")", screenX + 5, textY)
+			fontNormal.draw("Preis: " + news.GetPrice(GetPlayerBaseCollection().playerID)+"  (PreisMod: "+MathHelper.NumberToString(news.newsEvent.GetModifier(TBroadcastMaterialSource.modKeyPriceLS),4)+")", screenX + 5, textY)
 			textY :+ 11
 			fontNormal.draw("Qualitaet: " + MathHelper.NumberToString(news.GetQuality(), 4) + " (Event:" + MathHelper.NumberToString(news.newsEvent.GetQuality(),4) + ", roh=" + MathHelper.NumberToString(news.newsEvent.GetQualityRaw(), 4) + ")", screenX + 5, textY)
 			textY :+ 11

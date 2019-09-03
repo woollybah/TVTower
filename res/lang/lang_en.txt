@@ -30,6 +30,8 @@ MULTIPLAYER = Multiplayer
 SINGLEPLAYER = Singleplayer
 RENDERER = Renderer
 SOUND_ENGINE = Soundengine
+SOUND_MUSIC_VOLUME = Music Volume
+SOUND_SFX_VOLUME = SFX Volume
 DEFAULTS_FOR_NEW_GAME= Defaults for "New Game"
 PORT_ONLINEGAME = Port for online games
 IN_ROOMS_SLOWDOWN_TIME_TO = In rooms slowdown time to
@@ -318,6 +320,7 @@ LICENCETYPE_SERIES = Serie
 LICENCETYPE_FRANCHISE = Franchise
 
 SERIES_WITH_X_EPISODES = Series with %EPISODESCOUNT% episodes
+COLLECTION_WITH_X_ELEMENTS = Collection with %X% elements
 SCRIPT_POTENTIAL = Potential
 
 PROGRAMME_GENRE_UNDEFINED = Various
@@ -518,15 +521,16 @@ DIALOGUE_BOSS_REPAYCREDIT				=	I want to repay my credit...
 DIALOGUE_BOSS_CREDIT_OK1				=	Again. Money. Agaaain?\nHmm, ok you are better in your job than other candidates. More than |b|%CREDIT%€|/b| is not possible, understood?!
 DIALOGUE_BOSS_CREDIT_OK2				=	You squander my good money!\nBetter hope that something reasonable comes out of this transaction.\n|b|%CREDIT%€|/b| is all I can offer. Do you agree?
 DIALOGUE_BOSS_CREDIT_OK_ACCEPT1			=	Yes, I will take that credit.
-DIALOGUE_BOSS_CREDIT_OK_ACCEPT_HALF1	=	Thanks boss, I will just need 50% of it, means |b|%CREDITHALF%€|/b|.
+DIALOGUE_BOSS_CREDIT_OK_ACCEPT_HALF1	=	Thanks boss, I will just need 50% of it, means |b|%VALUE%€|/b|.
+DIALOGUE_BOSS_CREDIT_OK_ACCEPT_QUARTER1	=	Oh, 25% is already enough, means |b|%VALUE%€|/b|.
 DIALOGUE_BOSS_DECLINE1					=	Hmm, thanks boss but I changed my mind.
 DIALOGUE_BOSS_DECLINE2					=	Just changed my mind, see you later boss.
 DIALOGUE_BOSS_DECLINE3					=	Ahem, I will come back later.
 DIALOGUE_BOSS_CREDIT_REPAY				=	Won't you just repay the old credit?\nYou still owe me |b|%CREDIT%€|/b| - repay that first!\nAnd now get lost or I'll kick your ass!!
 DIALOGUE_BOSS_CREDIT_REPAY_ACCEPT		=	Okay, I will repay something.
 DIALOGUE_BOSS_CREDIT_REPAY_BOSSRESPONSE	=	You don't say, at least one good news for today.\n \nHow much do you want to repay?
-DIALOGUE_BOSS_CREDIT_REPAY_100K			=	Oh well, I could repay |b|100.000€|/b|.
-DIALOGUE_BOSS_CREDIT_REPAY_500K			=	Uuhm, I could repay |b|500.000€|/b|.
+DIALOGUE_BOSS_CREDIT_REPAY_VALUE1		=	Oh well, I could repay |b|%VALUE%€|/b|.
+DIALOGUE_BOSS_CREDIT_REPAY_VALUE2		=	Uuhm, I could repay |b|%VALUE%€|/b|.
 DIALOGUE_BOSS_CREDIT_REPAY_ALL			=	Hmm, the whole credit which is |b|%CREDIT%€|/b|.
 
 DIALOGUE_BOSS_CHANGETOPIC1				=	Can't we talk about something different?
@@ -1080,6 +1084,7 @@ GENDER_WOMEN_SHORT = W
 
 LIVE_ON_TAPE = Live on tape
 ALL_MATCHES_FINISHED = All matches finished
+X_OF_Y_LIVE_MATCHES_ALREADY_STARTED = %X%/%Y% Live matches already started.
 
 
 SHOW_MAP_DETAILS = Show Map Details

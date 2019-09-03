@@ -17,6 +17,10 @@ Type TGUIProgrammePlanElement Extends TGUIGameListItem
 	Field lastSlot:Int = 0
 	Field plannedOnDay:Int = -1
 	Field imageBaseName:String = "pp_programmeblock1"
+	Field textImageAd:TImage {nosave}
+	Field textImageProgramme:TImage {nosave}
+	Field cacheStringAd:TStringBuffer {nosave}
+	Field cacheStringProgramme:TStringBuffer {nosave}
 
 	Global ghostAlpha:Float = 0.8
 
@@ -159,7 +163,7 @@ Type TGUIProgrammePlanElement Extends TGUIGameListItem
 
 	'override to disable clicks for items of other players
 	Method IsClickable:int()
-		'only owner can click on it 
+		'only owner can click on it
 		if broadcastMaterial and broadcastMaterial.GetOwner() <> GetPlayerBaseCollection().playerID Then return False
 
 		'skip if player cannot control the material
@@ -250,17 +254,35 @@ Type TGUIProgrammePlanElement Extends TGUIGameListItem
 						Else
 							GetSpriteFromRegistry(GetAssetBaseName()+"2"+variant).DrawClipped(New TRectangle.Init(drawPos.x, drawPos.y, -1, 30))
 						EndIf
-						'live
-						If TProgramme(broadcastMaterial) And TProgramme(broadcastMaterial).data.IsLive()
-							GetSpriteFromRegistry("pp_live").Draw(drawPos.x + GetSpriteFromRegistry(GetAssetBaseName()+"1"+variant).GetWidth(), drawPos.y,  -1, ALIGN_RIGHT_TOP)
-						EndIf
-						'xrated
-						If TProgramme(broadcastMaterial) And TProgramme(broadcastMaterial).data.IsXRated()
-							GetSpriteFromRegistry("pp_xrated").Draw(drawPos.x + GetSpriteFromRegistry(GetAssetBaseName()+"1"+variant).GetWidth(), drawPos.y,  -1, ALIGN_RIGHT_TOP)
-						EndIf
-						'paid
-						If TProgramme(broadcastMaterial) And TProgramme(broadcastMaterial).data.IsPaid()
-							GetSpriteFromRegistry("pp_paid").Draw(drawPos.x + GetSpriteFromRegistry(GetAssetBaseName()+"1"+variant).GetWidth(), drawPos.y,  -1, ALIGN_RIGHT_TOP)
+						If TProgramme(broadcastMaterial)
+							'live
+							If TProgramme(broadcastMaterial).licence.IsLive()
+								Local broadcastedLive:int = True
+								If not IsDragged() and TProgramme(broadcastMaterial).programmedDay >= 0
+									broadcastedLive = False
+									If GetWorldTime().GetDay(TProgramme(broadcastMaterial).licence.data.GetReleaseTime()) = TProgramme(broadcastMaterial).programmedDay
+										If GetWorldTime().GetDayHour(TProgramme(broadcastMaterial).licence.data.GetReleaseTime()) = TProgramme(broadcastMaterial).programmedHour
+											broadcastedLive = True
+										EndIf
+									EndIf
+								EndIf
+								If not broadcastedLive
+									local oldA:Float = GetAlpha()
+									SetAlpha 0.25 * oldA
+									GetSpriteFromRegistry("pp_live").Draw(drawPos.x + GetSpriteFromRegistry(GetAssetBaseName()+"1"+variant).GetWidth(), drawPos.y,  -1, ALIGN_RIGHT_TOP)
+									SetAlpha oldA
+								Else
+									GetSpriteFromRegistry("pp_live").Draw(drawPos.x + GetSpriteFromRegistry(GetAssetBaseName()+"1"+variant).GetWidth(), drawPos.y,  -1, ALIGN_RIGHT_TOP)
+								EndIf
+							EndIf
+							'xrated
+							If TProgramme(broadcastMaterial).licence.IsXRated()
+								GetSpriteFromRegistry("pp_xrated").Draw(drawPos.x + GetSpriteFromRegistry(GetAssetBaseName()+"1"+variant).GetWidth(), drawPos.y,  -1, ALIGN_RIGHT_TOP)
+							EndIf
+							'paid
+							If TProgramme(broadcastMaterial).licence.IsPaid()
+								GetSpriteFromRegistry("pp_paid").Draw(drawPos.x + GetSpriteFromRegistry(GetAssetBaseName()+"1"+variant).GetWidth(), drawPos.y,  -1, ALIGN_RIGHT_TOP)
+							EndIf
 						EndIf
 
 						titleIsVisible = True
@@ -298,14 +320,8 @@ Type TGUIProgrammePlanElement Extends TGUIGameListItem
 		'check if we have to skip ghost drawing
 		If hasOption(GUI_OBJECT_DRAWMODE_GHOST) And Not CanDrawGhost() Then Return
 
+		If Not broadcastMaterial then Throw "Programme planner 'TGUIProgrammePlanElement.broadcast' is null!"
 
-		If Not broadcastMaterial
-			SetColor 255,0,0
-			DrawRect(GetScreenX(), GetScreenY(), 150,20)
-			SetColor 255,255,255
-			GetBitmapFontManager().basefontBold.Draw("no broadcastMaterial", GetScreenX()+5, GetScreenY()+3)
-			Return
-		EndIf
 
 		'If isDragged() Then state = 0
 		Select broadcastMaterial.state
@@ -362,7 +378,7 @@ Type TGUIProgrammePlanElement Extends TGUIGameListItem
 			GetSpriteFromRegistry("gfx_interface_ingamechat_key.locked").Draw(GetScreenX() + GetSpriteFromRegistry(GetAssetBaseName()+"1").area.GetW() - 4, GetScreenY() + 5, -1, ALIGN_RIGHT_TOP)
 			SetAlpha GetAlpha() * 1.25
 		endif
-		
+
 		If titleIsVisible
 			Local useType:Int = broadcastMaterial.usedAsType
 			If hasOption(GUI_OBJECT_DRAWMODE_GHOST) And lastListType > 0
@@ -379,16 +395,11 @@ Type TGUIProgrammePlanElement Extends TGUIGameListItem
 	End Method
 
 
-	Field textImageAd:TImage {nosave}
-	Field textImageProgramme:TImage {nosave}
-	Field cacheStringAd:string {nosave}
-	Field cacheStringProgramme:string {nosave}
-	
 	Method DrawProgrammeBlockText:Int(textArea:TRectangle, titleColor:TColor=Null, textColor:TColor=Null)
-		Local title:String			= broadcastMaterial.GetTitle()
-		Local titleAppend:String	= ""
-		Local text:String			= ""
-		Local text2:String			= ""
+		Local title:String = broadcastMaterial.GetTitle()
+		Local titleAppend:String = ""
+		Local text:String = ""
+		Local text2:String = ""
 
 		Select broadcastMaterial.materialType
 			'we got a programme used as programme
@@ -402,8 +413,16 @@ Type TGUIProgrammePlanElement Extends TGUIGameListItem
 						title = programme.licence.GetParentLicence().GetTitle() + ":  "+programme.GetTitle()
 						'uncomment if you wish episode number in title
 						'titleAppend = " (" + programme.GetEpisodeNumber() + "/" + programme.GetEpisodeCount() + ")"
-						text:+"-"+GetLocale("SERIES_SINGULAR")
-						text2 = "Ep.: " + (programme.GetEpisodeNumber()) + "/" + programme.GetEpisodeCount()
+
+						'TODO: remove parent-check once older savegames are not in use anymore
+						'      as newer games use "IsCollectionElement()" properly
+						If programme.IsCollectionElement() or programme.licence.GetParentLicence().IsCollection()
+							text:+"-"+GetLocale("LICENCETYPE_COLLECTION")
+						Else
+							text:+"-"+GetLocale("SERIES_SINGULAR")
+						EndIf
+						'text2 = "Ep.: " + (programme.GetEpisodeNumber()) + "/" + programme.GetEpisodeCount()
+						text2 = (programme.GetEpisodeNumber()) + "/" + programme.GetEpisodeCount()
 					EndIf
 				EndIf
 			'we got an advertisement used as programme (aka Tele-Shopping)
@@ -415,25 +434,29 @@ Type TGUIProgrammePlanElement Extends TGUIGameListItem
 		End Select
 
 
-		Local maxWidth:Int = textArea.GetW()
-		Local titleFont:TBitmapFont = GetBitmapFont("DefaultThin", 12, BOLDFONT)
-
-		'shorten the title to fit into the block
-		While titleFont.getWidth(title + titleAppend) > maxWidth And title.length > 4
-			title = title[..title.length-3]+".."
-		Wend
-		'add eg. "(1/10)"
-		title = title + titleAppend
-
 		'refresh cache?
-		local newCacheString:string = title + text + text2
-		if newCacheString <> cacheStringProgramme
+		local newCacheString:TStringBuffer = TStringBuffer.Create(title)
+		newCacheString.Append(text)
+		newCacheString.Append(text2)
+
+		if not cacheStringProgramme or newCacheString.Length() <> cacheStringProgramme.Length() or newCacheString.ToString() <> cacheStringProgramme.ToString()
 			textImageProgramme = null
 			cacheStringProgramme = newCacheString
 		endif
 
+
 		'create cache if needed
 		if not textImageProgramme
+			Local maxWidth:Int = textArea.GetW()
+			Local titleFont:TBitmapFont = GetBitmapFont("DefaultThin", 12, BOLDFONT)
+
+			'shorten the title to fit into the block
+			While title.length > 4 And titleFont.getWidth(title + titleAppend) > maxWidth
+				title = title[.. title.length-3] + ".."
+			Wend
+			'add eg. "(1/10)"
+			title = title + titleAppend
+
 			Local useFont:TBitmapFont = GetBitmapFont("Default", 12, ITALICFONT)
 			If Not titleColor Then titleColor = TColor.Create(0,0,0)
 			If Not textColor Then textColor = TColor.Create(50,50,50)
@@ -443,9 +466,9 @@ Type TGUIProgrammePlanElement Extends TGUIGameListItem
 			TBitmapFont.pixmapOrigin.SetXY(-textArea.position.x, -textArea.position.y)
 
 			'draw
-			titleFont.drawBlock(title, textArea.position.GetIntX() + 5, textArea.position.GetIntY() +2, textArea.GetW() - 5, 18, Null, titleColor, 0, True, 1.0, False)
-			useFont.draw(text, textArea.position.GetIntX() + 5, textArea.position.GetIntY() + 17, textColor)
-			useFont.draw(text2, textArea.position.GetIntX() + 138, textArea.position.GetIntY() + 17, textColor)
+			titleFont.drawBlock(title, textArea.position.GetIntX() + 3, textArea.position.GetIntY() +3, textArea.GetW() - 5, 18, Null, titleColor, 0, True, 1.0, False)
+			useFont.draw(text, textArea.position.GetIntX() + 3, textArea.position.GetIntY() + 16, textColor)
+			useFont.draw(text2, textArea.position.GetIntX() + 138, textArea.position.GetIntY() + 16, textColor)
 
 			SetColor 255,255,255
 
@@ -470,14 +493,17 @@ Type TGUIProgrammePlanElement Extends TGUIGameListItem
 			Case TVTBroadcastMaterialType.ADVERTISEMENT
 				If TAdvertisement(broadcastMaterial)
 					Local advertisement:TAdvertisement = TAdvertisement(broadcastMaterial)
-					If advertisement.isState(advertisement.STATE_FAILED)
-						text = "------"
-					Else
-						If advertisement.contract.isSuccessful()
-							text = "- OK -"
-						Else
-							text = GetPlayerProgrammePlan(advertisement.owner).GetAdvertisementSpotNumber(advertisement, lastListType) + "/" + advertisement.contract.GetSpotCount()
-						EndIf
+					Local number:int = GetPlayerProgrammePlan(advertisement.owner).GetAdvertisementSpotNumber(advertisement, lastListType)
+					Local maxNumber:int = advertisement.contract.GetSpotCount()
+
+					text = number + "/" + maxNumber
+
+					'mark failed adblocks
+					If advertisement.isState(TAdvertisement.STATE_FAILED)
+						text2 = "--"
+					'mark finishing adblock
+					ElseIf maxNumber = number And advertisement.contract.IsCompleted()
+						text2 = "OK"
 					EndIf
 				EndIf
 			'we got an programme used as advertisement (aka programmetrailer)
@@ -494,11 +520,15 @@ Type TGUIProgrammePlanElement Extends TGUIGameListItem
 
 
 		'refresh cache?
-		local newCacheString:string = title + text + text2
-		if newCacheString <> cacheStringAd
+		local newCacheString:TStringBuffer = TStringBuffer.Create(title)
+		newCacheString.Append(text)
+		newCacheString.Append(text2)
+
+		if not cacheStringAd or newCacheString.Length() <> cacheStringAd.Length() or newCacheString.ToString() <> cacheStringAd.ToString()
 			textImageAd = null
 			cacheStringAd = newCacheString
 		endif
+
 
 		'create cache if needed
 		if not textImageAd
@@ -509,10 +539,10 @@ Type TGUIProgrammePlanElement Extends TGUIGameListItem
 			If Not titleColor Then titleColor = TColor.Create(0,0,0)
 			If Not textColor Then textColor = TColor.Create(50,50,50)
 
-			GetBitmapFont("DefaultThin", 10, BOLDFONT).drawBlock(title, textArea.position.GetIntX() + 3, textArea.position.GetIntY() + 2, textArea.GetW(), 18, Null, TColor.CreateGrey(0), 0,1,1.0, False)
+			GetBitmapFont("DefaultThin", 10, BOLDFONT).drawBlock(title, textArea.position.GetIntX() + 3, textArea.position.GetIntY() + 3, textArea.GetW(), 15, Null, TColor.CreateGrey(0), 0,1,1.0, False)
 			textColor.setRGB()
-			GetBitmapFont("Default", 10).drawBlock(text, textArea.position.GetIntX() + 3, textArea.position.GetIntY() + 17, TextArea.GetW(), 30)
-			GetBitmapFont("Default", 10).drawBlock(text2,textArea.position.GetIntX() + 3, textArea.position.GetIntY() + 17, TextArea.GetW(), 20, New TVec2D.Init(ALIGN_RIGHT))
+			GetBitmapFont("Default", 10).drawBlock(text, textArea.position.GetIntX() + 3, textArea.position.GetIntY() + 17, TextArea.GetW(), 15)
+			GetBitmapFont("Default", 10).drawBlock(text2,textArea.position.GetIntX() + 3, textArea.position.GetIntY() + 17, TextArea.GetW() - 3, 15, New TVec2D.Init(ALIGN_RIGHT))
 
 			SetColor 255,255,255
 
@@ -662,7 +692,7 @@ rem
 		Return True
 	End Function
 endrem
-	
+
 	'handle successful drops of broadcastmaterial on the list
 	Method onFinishDropProgrammePlanElement:Int(triggerEvent:TEventBase)
 		'resize that item to conform to the list

@@ -1,3 +1,5 @@
+SuperStrict
+
 Type TTVTException Extends TBlitzException
 	Field message:String
 
@@ -19,7 +21,7 @@ End Type
 
 
 
-Type TArgumentException Extends TTVTException
+Type TTVTArgumentException Extends TTVTException
 	Field argument:String
 	Field value:String
 
@@ -42,8 +44,8 @@ Type TArgumentException Extends TTVTException
 	End Method
 
 
-	Function Create:TArgumentException( argument:String, value:String = null, message:String = Null )
-		Local t:TArgumentException = New TArgumentException
+	Function Create:TTVTArgumentException( argument:String, value:String = null, message:String = Null )
+		Local t:TTVTArgumentException = New TTVTArgumentException
 		t.argument = argument
 		t.value = value
 		t.message = message
@@ -53,9 +55,9 @@ End Type
 
 
 
-Type TNullObjectExceptionExt Extends TTVTException
-	Function Create:TNullObjectExceptionExt( message:String = Null )
-		Local t:TNullObjectExceptionExt = New TNullObjectExceptionExt
+Type TTVTNullObjectExceptionExt Extends TTVTException
+	Function Create:TTVTNullObjectExceptionExt( message:String = Null )
+		Local t:TTVTNullObjectExceptionExt = New TTVTNullObjectExceptionExt
 		t.message = message
 		Return t
 	End Function

@@ -14,10 +14,11 @@ Type TGameConfig {_exposeToLua}
 	Field KeepBankruptPlayerFinances:int = True
 	Field dateFormat:string = "d.m.y"
 	Field devGUID:string
+	Field mouseHandlingDisabled:int = False
 
 	Global clNormal:TColor = TColor.clBlack
-	Global clPositive:TColor = new TColor.Create(90, 110, 90)
-	Global clNegative:TColor = new TColor.Create(110, 90, 90)
+	Global clPositive:TColor = TColor.Create(90, 110, 90)
+	Global clNegative:TColor = TColor.Create(110, 90, 90)
 
 '	Field _values:TData
 	Field _modifiers:TData
@@ -58,13 +59,13 @@ rem
 	End Method
 endrem
 
-	Method GetModifier:Float(key:string, defaultValue:Float=1.0)
+	Method GetModifier:Float(key:object, defaultValue:Float=1.0)
 		if not _modifiers then return defaultValue
 		return _modifiers.GetFloat(key, defaultValue)
 	End Method
 
 
-	Method SetModifier(key:string, value:Float)
+	Method SetModifier(key:object, value:Float)
 		if not _modifiers then _modifiers = new TData
 		_modifiers.AddNumber(key, value)
 	End Method

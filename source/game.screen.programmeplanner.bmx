@@ -824,8 +824,8 @@ Type TScreenHandler_ProgrammePlanner
 				GuiListProgrammes.RemoveItem(item)
 			EndIf
 
-			'reset mousebutton
-			MouseManager.ResetKey(1)
+			'handled single click
+			MouseManager.ResetClicked(1)
 
 			Return False
 		EndIf
@@ -1044,8 +1044,9 @@ Type TScreenHandler_ProgrammePlanner
 			item.remove()
 			item = Null
 
+			'avoid clicks
 			'remove right click - to avoid leaving the room
-			MouseManager.ResetKey(2)
+			MouseManager.ResetClicked(2)
 			'also avoid long click (touch screen)
 			MouseManager.ResetLongClicked(1)
 		EndIf
@@ -1196,14 +1197,7 @@ Type TScreenHandler_ProgrammePlanner
 					Next
 					EnableSlotOverlays(hourSlots, TVTBroadcastMaterialType.PROGRAMME, 1)
 '					EnableSlotOverlays(hourSlots, TVTBroadcastMaterialType.ADVERTISEMENT, 1)
-rem
-Ueberpruefen:
-- Lizenzen "Live" setzen und Zeitfenster erlauben
-- Zeigt datenblatt dann "Live morgen 0:05 Uhr" _und_ "Nursendbar 0-6"?
 
-- KI muss auch damit klarkommen (ausfiltern solcher Sendungen in der
-"verfuegbar fuer jetzt" Liste
-endrem
 				'else mark the exact live time (releasetime + blocks) slots
 				'(if planning day not in the past)
 				ElseIf programme.data.IsLive() And GetWorldTime().GetDay() <= planningDay
@@ -1248,22 +1242,28 @@ endrem
 						'past day - mark NO block of today
 						elseif startDay < planningDay and endDay < planningDay
 							'
-						'starts or ends today
+						'starts or ends today / planning day
 						else
-							Local nowHour:Int = GetWorldtime().GetDayHour()
-							Local startHour:Int = GetWorldtime().GetDayHour(blockTime)
+							Local nowHour:Int = GetWorldTime().GetDayHour()
+							Local startHour:Int = GetWorldTime().GetDayHour(blockTime)
 							Local endHour:Int = GetWorldTime().GetDayHour(blockTime) + programme.GetBlocks()
-
 							If GetWorldTime().GetDayMinute() < 5 Then nowHour :- 1
 
 							'only mark till midnight
 							if startDay <> planningDay then startHour = 0
 							if endDay <> planningDay then endHour = 23
-							if startHour > nowHour
-								For Local i:Int = 0 Until startHour
-									hourSlots :+ [ i ]
-								Next
-							endif
+
+							local earliestHour:int = 0
+							'if today then only mark "not run" hours
+							If planningDay = GetWorldTime().GetDay()
+								earliestHour = GetWorldTime().GetDayHour()
+								'already in this hour
+								If GetWorldTime().GetDayMinute() > 5 Then earliestHour :+ 1
+							EndIf
+
+							For Local i:Int = earliestHour Until startHour
+								hourSlots :+ [ i ]
+							Next
 						endif
 
 						EnableSlotOverlays(hourSlots, TVTBroadcastMaterialType.PROGRAMME, 2)
@@ -1406,13 +1406,15 @@ endrem
 
 		If button = plannerNextDayButton
 			ChangePlanningDay(planningDay+1)
-			'reset mousebutton
-			MouseManager.ResetKey(1)
+
+			'handled single click
+			MouseManager.ResetClicked(1)
 			Return True
 		ElseIf button = plannerPreviousDayButton
 			ChangePlanningDay(planningDay-1)
-			'reset mousebutton
-			MouseManager.ResetKey(1)
+
+			'handled single click
+			MouseManager.ResetClicked(1)
 			Return True
 		EndIf
 
@@ -1422,8 +1424,8 @@ endrem
 		PPcontractList.SetOpen(0)
 		PPprogrammeList.SetOpen(0)
 
-		'reset mousebutton
-		MouseManager.ResetKey(1)
+		'handled single click
+		MouseManager.ResetClicked(1)
 
 		'open others?
 		If button = ProgrammePlannerButtons[0] Then Return PPcontractList.SetOpen(1)		'opens contract list
@@ -1851,9 +1853,9 @@ endrem
 
 
 		'=== DRAW HINTS FOR PRIMETIME/NIGHTTIME ===
-		Local hintColor:TColor = New TColor.CreateGrey(75)
-		Local hintColorGood:TColor = New TColor.Create(60,110,60)
-		Local hintColorBad:TColor = New TColor.Create(110,60,60)
+		Local hintColor:TColor = TColor.CreateGrey(75)
+		Local hintColorGood:TColor = TColor.Create(60,110,60)
+		Local hintColorBad:TColor = TColor.Create(110,60,60)
 		Local f:TBitmapFont = GetBitmapFont("default", 10)
 		Local fB:TBitmapFont = GetBitmapFont("default", 10, BOLDFONT)
 		Local oldA:Float = GetAlpha()

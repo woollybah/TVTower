@@ -7,20 +7,23 @@ _G["TaskStationMap"] = class(AITask, function(c)
 	c:ResetDefaults()
 end)
 
+
 function TaskStationMap:typename()
 	return "TaskStationMap"
 end
 
+
 function TaskStationMap:ResetDefaults()
-	self.BudgetWeight = 3
+	self.BudgetWeight = 4
 	self.BasePriority = 1
-	self.NeededInvestmentBudget = 350000
+	self.NeededInvestmentBudget = 280000
 	self.InvestmentPriority = 8
 
 	self.knownAntennaPositions = {}
 	self.knownSatelliteUplinks = {}
 	self.knownCableNetworkUplinks = {}
 end
+
 
 function TaskStationMap:Activate()
 	self.AnalyseStationMarketJob = JobAnalyseStationMarket()
@@ -32,6 +35,7 @@ function TaskStationMap:Activate()
 	self.BuyStationJob = JobBuyStation()
 	self.BuyStationJob.Task = self
 end
+
 
 function TaskStationMap:GetNextJobInTargetRoom()
 	if (self.AnalyseStationMarketJob.Status ~= JOB_STATUS_DONE) then
@@ -50,9 +54,11 @@ function TaskStationMap:GetNextJobInTargetRoom()
 	self:SetDone()
 end
 
+
 function TaskStationMap:BeforeBudgetSetup()
-	self:SetFixedCosts()
+	self:CalculateFixedCosts()
 end
+
 
 function TaskStationMap:BudgetSetup()
 	if self.UseInvestment then
@@ -61,21 +67,21 @@ function TaskStationMap:BudgetSetup()
 	end
 end
 
+
 function TaskStationMap:OnMoneyChanged(value, reason, reference)
-	if (tostring(reason) == tostring(TVT.Constants.PlayerFinanceEntryType.PAY_STATION)) then
+	reason = tonumber(reason)
+	if (reason == TVT.Constants.PlayerFinanceEntryType.PAY_STATION) then
 		self:PayFromBudget(value)
-		self:SetFixedCosts()
-	elseif (tostring(reason) == tostring(TVT.Constants.PlayerFinanceEntryType.SELL_STATION)) then
+		self:CalculateFixedCosts()
+	elseif (reason == TVT.Constants.PlayerFinanceEntryType.SELL_STATION) then
 		self:PayFromBudget(value)
-		self:SetFixedCosts()
-	elseif (tostring(reason) == tostring(TVT.Constants.PlayerFinanceEntryType.PAY_STATIONFEES)) then
-		self.FixedCosts = value
-		--self.FixedCostsBudget = self.FixedCostsBudget - value
+		self:CalculateFixedCosts()
 	end
 end
 
-function TaskStationMap:SetFixedCosts()
-	self.FixedCosts = MY.GetStationMap().CalculateStationCosts()
+
+function TaskStationMap:CalculateFixedCosts()
+	self.FixedCosts = TVT.of_GetStationCosts()
 end
 
 
@@ -192,6 +198,9 @@ function JobAdjustStationInvestment:Tick()
 
 	-- require a minimum investment
 	self.Task.NeededInvestmentBudget = math.max(300000, self.Task.NeededInvestmentBudget)
+
+
+	self.Status = JOB_STATUS_DONE
 end
 -- <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -244,7 +253,7 @@ function JobBuyStation:GetBestCableNetworkOffer()
 			-- ignore if we already are clients of this provider
 			-- ignore non-launched and not available for player
 			if cableNetwork.IsSubscribedChannel(TVT.ME) == 0 and cableNetwork.IsLaunched() == 1 and cableNetwork.IsActive() == 1 then
-				local tempStation = MY.GetStationMap().GetTemporaryCableNetworkUplinkStation(i)
+				local tempStation = TVT.of_GetTemporaryCableNetworkUplinkStation(i)
 				if tempStation then
 					local price = tempStation.GetTotalBuyPrice()
 					local pricePerViewer = tempStation.GetExclusiveReach() / price
@@ -263,6 +272,8 @@ function JobBuyStation:GetBestCableNetworkOffer()
 	end
 	if bestOffer then
 		debugMsg(" - best cable network " .. bestOffer.GetName() .."  reach: " .. bestOffer.GetReach() .. "  exclusive/increase: " .. bestOffer.GetExclusiveReach() .. "  price: " .. bestOffer.GetBuyPrice() .. " (incl.fees: " .. bestOffer.GetTotalBuyPrice() ..")  F: " .. (bestOffer.GetExclusiveReach() / bestOffer.GetPrice()) .. "  buyPrice: " .. bestOffer.GetBuyPrice() )
+	else
+		debugMsg(" -> no best cable network found")
 	end
 
 	return bestOffer, bestAttraction
@@ -282,7 +293,7 @@ function JobBuyStation:GetBestSatelliteOffer()
 			-- ignore if we already are clients of this provider
 			-- ignore non-launched and not available for player
 			if satellite.IsSubscribedChannel(TVT.ME) == 0 and satellite.IsLaunched() == 1 and satellite.IsActive() == 1 then
-				local tempStation = MY.GetStationMap().GetTemporarySatelliteUplinkStation(i)
+				local tempStation = TVT.of_GetTemporarySatelliteUplinkStation(i)
 				if tempStation then
 					local price = tempStation.GetTotalBuyPrice()
 					local pricePerViewer = tempStation.GetExclusiveReach() / price
@@ -302,8 +313,11 @@ function JobBuyStation:GetBestSatelliteOffer()
 			end
 		end
 	end
-	debugMsg(" -> best satellite " .. bestOffer.GetName() .."  reach: " .. bestOffer.GetReach() .. "  exclusive/increase: " .. bestOffer.GetExclusiveReach() .. "  price: " .. bestOffer.GetBuyPrice() .. " (incl.fees: " .. bestOffer.GetTotalBuyPrice() ..")  F: " .. (bestOffer.GetExclusiveReach() / bestOffer.GetPrice()) .. "  buyPrice: " .. bestOffer.GetBuyPrice() )
-
+	if bestOffer ~= nil then
+		debugMsg(" -> best satellite " .. bestOffer.GetName() .."  reach: " .. bestOffer.GetReach() .. "  exclusive/increase: " .. bestOffer.GetExclusiveReach() .. "  price: " .. bestOffer.GetBuyPrice() .. " (incl.fees: " .. bestOffer.GetTotalBuyPrice() ..")  F: " .. (bestOffer.GetExclusiveReach() / bestOffer.GetPrice()) .. "  buyPrice: " .. bestOffer.GetBuyPrice() )
+	else
+		debugMsg(" -> no best satellite found")
+	end
 	return bestOffer, bestAttraction
 end
 
@@ -346,7 +360,7 @@ function JobBuyStation:GetBestAntennaOffer()
 
 	-- 4)
 		--for i = 1, 50 do
-		--	local tempStation = MY.GetStationMap().GetTemporaryAntennaStation(math.random(35, 560), math.random(1, 375))
+		--	local tempStation = TVT.of_GetTemporaryAntennaStation(math.random(35, 560), math.random(1, 375))
 	local tablePos = 0
 	for key,value in pairs(stationPositions) do
 		tablePos = tablePos + 1
@@ -354,11 +368,11 @@ function JobBuyStation:GetBestAntennaOffer()
 		local y = value[2] + math.random(-5,5)
 		local otherOwner = 0
 		if table.count(value) > 2 then otherOwner = value[3] end
-		local tempStation = MY.GetStationMap().GetTemporaryAntennaStation(x, y)
+		local tempStation = TVT.of_GetTemporaryAntennaStation(x, y)
 
-		if tempStation ~= nil then
-			debugMsg(" - Station " .. tablePos .. "  at " .. x .. "," .. y .. ".  owner: " .. otherOwner .. "  reach: " .. tempStation.GetReach() .. "  exclusive/increase: " .. tempStation.GetExclusiveReach() .. "  price: " .. tempStation.GetBuyPrice() .. " (incl.fees: " .. tempStation.GetTotalBuyPrice() ..")  F: " .. (tempStation.GetExclusiveReach() / tempStation.GetPrice()) .. "  buyPrice: " .. tempStation.GetBuyPrice() )
-		end
+--		if tempStation ~= nil then
+--			debugMsg(" - Station " .. tablePos .. "  at " .. x .. "," .. y .. ".  owner: " .. otherOwner .. "  reach: " .. tempStation.GetReach() .. "  exclusive/increase: " .. tempStation.GetExclusiveReach() .. "  price: " .. tempStation.GetBuyPrice() .. " (incl.fees: " .. tempStation.GetTotalBuyPrice() ..")  F: " .. (tempStation.GetExclusiveReach() / tempStation.GetPrice()) .. "  buyPrice: " .. tempStation.GetBuyPrice() )
+--		end
 
 		--filter criterias
 		--0) skip checks if there is no tempstation
@@ -366,15 +380,15 @@ function JobBuyStation:GetBestAntennaOffer()
 			-- debugMsg("tempStation is nil!")
 		--1) outside
 		elseif tempStation.GetPrice() < 0 then
-			debugMsg("    -> outside of map")
+--			debugMsg("    -> outside of map")
 			tempStation = nil
 		--2) price to high
 		elseif tempStation.GetPrice() > self.Task.CurrentBudget then
-			debugMsg("    -> too expensive")
+--			debugMsg("    -> too expensive")
 			tempStation = nil
 		--3) relative increase to low (at least 30% required)
 		elseif tempStation.GetRelativeExclusiveReach() < 0.30 then
-			debugMsg("    -> not enough reach increase")
+--			debugMsg("    -> not enough reach increase")
 			tempStation = nil
 
 		--4) absolute increase too low
@@ -383,7 +397,7 @@ function JobBuyStation:GetBestAntennaOffer()
 
 		--5)  reach to low (at least 75.000 required)
 		elseif tempStation.GetReach() < 75000 then
-			debugMsg("    -> not enough absolute reach")
+--			debugMsg("    -> not enough absolute reach")
 			tempStation = nil
 		end
 
@@ -403,7 +417,7 @@ function JobBuyStation:GetBestAntennaOffer()
 			if otherOwner > 0 then attraction = attraction * 1.10 end
 			-- raise attraction (even further) if AI's enemy is there
 			if otherOwner == player:GetArchEnemyId() then attraction = attraction * 1.06 end
-			debugMsg("    -> attraction: " .. attraction .. "  |  ".. pricePerViewer .. " - (" .. priceDiff .. " / currentBudget: " .. self.Task.CurrentBudget)
+--			debugMsg("    -> attraction: " .. attraction .. "  |  ".. pricePerViewer .. " - (" .. priceDiff .. " / currentBudget: " .. self.Task.CurrentBudget)
 
 			if bestOffer == nil then
 				bestOffer = tempStation

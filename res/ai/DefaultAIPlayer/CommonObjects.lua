@@ -3,10 +3,8 @@
 -- Movie ist jetzt nur noch ein Wrapper
 
 function CheckMovieBuyConditions(licence, maxPrice, minQuality)
-	if (licence.GetPrice() > maxPrice) then return false end
-	if (minQuality ~= nil) then
-		if (licence.GetQuality() < minQuality) then return false end
-	end
+	if maxPrice ~= nil and (licence.GetPrice() > maxPrice) then return false; end
+	if (minQuality ~= nil) and (licence.GetQuality() < minQuality) then return false; end
 	return true
 end
 
@@ -34,6 +32,41 @@ function GetDefaultProgrammeQualityByHour(hour)
 		return 0.18
 	end
 	return 0.00
+end
+
+
+function FilterAdContractsByMinAudience(contractList, minAudienceMin, minAudienceMax, forbiddenIDs)
+	local filteredList = {}
+
+	if contractList ~= nil then
+		if type(minAudienceMin) == "number" or minAudienceMin == nil then
+			minAudienceMin = TVT.audiencePredictor.GetEmptyAudience().InitWithBreakdown(tonumber(minAudienceMin))
+		end
+		if type(minAudienceMax) == "number" or minAudienceMax == nil then
+			minAudienceMax = TVT.audiencePredictor.GetEmptyAudience().InitWithBreakdown(tonumber(minAudienceMax))
+		end
+		local minAudienceMinSum = minAudienceMin.GetTotalSum()
+		local minAudienceMaxSum = minAudienceMax.GetTotalSum()
+
+--debugMsg("FilterAdContractsByMinAudience(list, " .. minAudienceMinSum .. " - " .. minAudienceMaxSum)
+		for k,v in pairs(contractList) do
+			local addIt = true
+
+			-- adjust guessed audience if only specific target groups count
+			if (v.GetLimitedToTargetGroup() > 0) then
+				if addIt and v.GetMinAudience() < minAudienceMin.GetTotalValue( v.GetLimitedToTargetGroup() ) then addIt = false end
+				if addIt and v.GetMinAudience() > minAudienceMax.GetTotalValue( v.GetLimitedToTargetGroup() ) then addIt = false end
+			else
+--debugMsg("  - " .. v.GetTitle() .. ": " .. v.GetMinAudience() .. " < " .. minAudienceMinSum .." or " .. v.GetMinAudience() .." > " .. minAudienceMaxSum .. "   ?")
+				if addIt and v.GetMinAudience() < minAudienceMinSum or v.GetMinAudience() > minAudienceMaxSum then addIt = false end
+			end
+
+			if addIt and table.contains(forbiddenIDs, v.GetID()) then addIt = false end
+
+			if addIt then table.insert(filteredList, v)	end
+		end
+	end
+	return filteredList
 end
 -- <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -97,7 +130,7 @@ function SpotRequisition:RemoveSlotRequisitionByTime(day, hour)
 	for k,v in pairs(removeList) do
 		table.removeElement(self.SlotReqs, v)
 		self.Count = self.Count - 1
-		--reduce priority but stay at least at 3 (see default initialization) 
+		--reduce priority but stay at least at 3 (see default initialization)
 		self.Priority = math.max(3, self.Priority - 1)
 	end
 
@@ -129,6 +162,9 @@ function SpotRequisition:UseThisContract(contract)
 end
 -- <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
+
+
+
 -- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _G["SpotSlotRequisition"] = class(Requisition, function(c)
 	Requisition.init(c)	-- must init base!
@@ -147,9 +183,11 @@ _G["SpotSlotRequisition"] = class(Requisition, function(c)
 	c.level = -1
 end)
 
+
 function SpotSlotRequisition:typename()
 	return "SpotSlotRequisition"
 end
+
 
 function SpotSlotRequisition:CheckActuality()
 	if (self.Done) then return false end
@@ -170,6 +208,7 @@ function SpotSlotRequisition:CheckActuality()
 		return false
 	end
 end
+
 
 function SpotSlotRequisition:Complete()
 	self.Done = true
@@ -200,7 +239,7 @@ end
 
 function BuyProgrammeLicencesRequisition:AddLicenceReq(req)
 	if req == nil then return; end
-	
+
 	if self.licenceReqs == nil then self.licenceReqs = {}; end
 	table.insert(self.licenceReqs, req)
 
@@ -257,7 +296,7 @@ function BuyProgrammeLicencesRequisition:RemoveLicenceRequisitionByReason(reason
 	for k,v in pairs(removeList) do
 		table.removeElement(self.licenceReqs, v)
 		self.Count = self.Count - 1
-		--reduce priority but stay at least at 5 (see default initialization) 
+		--reduce priority but stay at least at 5 (see default initialization)
 		self.Priority = math.max(5, self.Priority - 1)
 	end
 
@@ -279,9 +318,11 @@ _G["BuySingleProgrammeLicenceRequisition"] = class(Requisition, function(c)
 	c.lifeTime = -1
 end)
 
+
 function BuySingleProgrammeLicenceRequisition:typename()
 	return "BuySingleProgrammeLicenceRequisition"
 end
+
 
 function BuySingleProgrammeLicenceRequisition:CheckActuality()
 	if (self.Done) then return false end
@@ -293,6 +334,7 @@ function BuySingleProgrammeLicenceRequisition:CheckActuality()
 		return false
 	end
 end
+
 
 function BuySingleProgrammeLicenceRequisition:Complete()
 	self.Done = true
@@ -311,20 +353,120 @@ function AIToolsClass:typename()
 	return "AIToolsClass"
 end
 
+
+--TODO später dynamisieren
 function AIToolsClass:GetAverageBroadcastQualityByLevel(level)
 	if (level == 1) then
-		return 0.08 --Nachtprogramm
+		return 0.04 --Nachtprogramm
 	elseif (level == 2) then
-		return 0.12 --Mitternacht + Morgen
+		return 0.09 --Mitternacht + Morgen
 	elseif (level == 3) then
-		return 0.15 -- Nachmittag
+		return 0.13 -- Nachmittag
 	elseif (level == 4) then
-		return 0.20 -- Vorabend / Spät
+		return 0.18 -- Vorabend / Spät
 	elseif (level == 5) then
-		return 0.26 -- Primetime
+		return 0.23 -- Primetime
 	end
 	return 0.00
 end
+
+
+function AIToolsClass:GetAudienceQualityLevel(day, hour)
+	local maxAudience = self:GetMaxAudiencePercentage(day, hour)
+	if (maxAudience <= 0.04) then
+		return 1 --Nachtprogramm (2-6)
+	elseif (maxAudience <= 0.12) then
+		return 2 --Mitternacht + Morgen
+	elseif (maxAudience <= 0.20) then
+		return 3 -- Nachmittag
+	elseif (maxAudience <= 0.33) then
+		return 4 -- Vorabend / Spät
+	else
+		return 5 -- Primetime
+	end
+end
+
+
+function AIToolsClass:GetMaxAudiencePercentage(day, hour)
+	--debugMsg("AITools:GetMaxAudiencePercentage("..day ..", "..hour..") = " .. TVT.getPotentialAudiencePercentage(day,hour))
+	return TVT.getPotentialAudiencePercentage(day, hour)
+end
+
+
+function AIToolsClass:GetBroadcastQualityLevel(broadcastMaterial)
+	if broadcastMaterial == nil then return 0 end
+	local quality = broadcastMaterial:GetQuality() * 100
+
+	if quality > 20 then
+		return 5
+	elseif quality > 15 then
+		return 4
+	elseif quality > 10 then
+		return 3
+	elseif quality > 5 then
+		return 2
+	else
+		return 1
+	end
+end
+
+
+function AIToolsClass:GetBroadcastAttraction(broadcastMaterialSource, day, hour, forPlayer)
+	if broadcastMaterialSource == nil then return 0 end
+
+	if forPlayer == nil then forPlayer = _G["globalPlayer"] end
+
+	-- how much does time affect the attraction (horror/infomercials at night)
+	local timeMod = 1.0
+	-- how much does the audience like a genre/flag
+	local audienceMod = 1.0
+	-- how much likes the player to send this kind of programme/infomercial
+	local playerMod = 1.0
+
+
+	-- infomercials?
+	if broadcastMaterialSource.IsAdContract() == 1 then
+		audienceMod = 0.55
+		--infomercials are more appreciated during night and morning
+		--and less during afternoon/primetime
+		if hour ~= nil then
+			if hour >= 0 and hour <= 7 then timeMod = 1.07 end
+			if hour >=10 and hour <=12 then timeMod = 1.05 end
+			if hour >=13 and hour <=16 then timeMod = 0.95 end
+			if hour >=17 and hour <=23 then timeMod = 0.85 end
+		end
+
+		--[[
+		-- higher during early hours
+		if level <= 2 then choosenInfomercialValue = choosenInfomercialValue * 1.2; end
+		-- even more during night
+		if level <= 1 then choosenInfomercialValue = choosenInfomercialValue * 1.2; end
+		-- lower during evening
+		if level >= 4 then choosenInfomercialValue = choosenInfomercialValue * 0.80; end
+		-- even lower for prime time
+		if level >= 5 then choosenInfomercialValue = choosenInfomercialValue * 0.80; end
+		--]]
+
+		-- modify attraction by a player-individual modifier.
+		playerMod = forPlayer.Strategy.GetInfomercialWeight()
+
+	-- paid programming?
+	elseif broadcastMaterialSource.IsProgrammeLicence() == 1 and broadcastMaterialSource.HasDataFlag(TVT.Constants.ProgrammeDataFlag.PAID) == 1 then
+		audienceMod = 0.75
+		--infomercials are more appreciated during night and morning
+		--and less during afternoon/primetime
+		if hour ~= nil then
+			if hour >= 0 and hour <=14 then timeMod = 1.10 end
+			if hour >=20 and hour <=22 then timeMod = 0.90 end
+		end
+	end
+
+	-- "GetQuality()" already contains topicality-influence for infomercials
+	-- and programmes
+	-- return playerMod * timeMod * audienceMod * (broadcastMaterialSource.GetQuality() * broadcastMaterialSource.GetProgrammeTopicality())
+	return playerMod * timeMod * audienceMod * broadcastMaterialSource.GetQuality()
+end
+
 --[[
 function AIToolsClass:GetMaxAudiencePercentageByLevel(level)
 	if level == 1 then
@@ -339,20 +481,6 @@ function AIToolsClass:GetMaxAudiencePercentageByLevel(level)
 		return 0.3459
 	end
 	return 0.00
-end
-
-function AIToolsClass:GuessedAudienceForLevel(level)
-	--debugMsg("GuessedAudienceForLevel - level: " .. level)
-	local globalPercentageByHour = self:GetMaxAudiencePercentageByLevel(level) -- Die Maximalquote: Entspricht ungefähr "maxAudiencePercentage"
-	--debugMsg("globalPercentageByHour: " .. globalPercentageByHour)
-	local averageBroadcastQualityByLevel = self:GetAverageBroadcastQualityByLevel(level) -- Die Durchschnittsquote dieses Qualitätslevels
-
-	--Formel: Filmqualität * Potentielle Quote nach Uhrzeit (maxAudiencePercentage) * Echte Maximalzahl der Zuschauer
-	local guessedAudience = averageBroadcastQualityByLevel * globalPercentageByHour * MY.GetMaxAudience()
-
-	--debugMsg("GuessedAudienceForLevel: " .. guessedAudience .. " = averageBroadcastQualityByLevel (" .. averageBroadcastQualityByLevel .. ") * globalPercentageByHour (" .. globalPercentageByHour .. ") *  MY.GetMaxAudience() (" .. MY.GetMaxAudience() .. ")")
-
-	return guessedAudience
 end
 ]]--
 AITools = AIToolsClass()

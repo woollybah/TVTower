@@ -332,6 +332,8 @@ Type TScript Extends TScriptBase {_exposeToLua="selected"}
 	'many scripts are based on the same script template on the same time)
 	Field basedOnScriptTemplateID:int = 0
 
+	Global spriteNameOverlayXRatedLS:TLowerString = new TLowerString.Create("gfx_datasheet_overlay_xrated")
+
 
 	Method GenerateGUID:string()
 		return "script-"+id
@@ -748,6 +750,11 @@ Type TScript Extends TScriptBase {_exposeToLua="selected"}
 	End Method
 
 
+	Method GetSellPrice:Int() {_exposeToLua}
+		return GetPrice()
+	End Method
+
+
 	Method GetPrice:Int() {_exposeToLua}
 		local value:int
 		'single-script
@@ -881,7 +888,7 @@ Type TScript Extends TScriptBase {_exposeToLua="selected"}
 		local finance:TPlayerFinance = GetPlayerFinance(owner,-1)
 		if not finance then return False
 
-		finance.SellScript(GetPrice(), self)
+		finance.SellScript(GetSellPrice(), self)
 
 		'set unused again
 
@@ -896,7 +903,7 @@ Type TScript Extends TScriptBase {_exposeToLua="selected"}
 		local finance:TPlayerFinance = GetPlayerFinance(playerID)
 		if not finance then return False
 
-		If finance.PayScript(getPrice(), self)
+		If finance.PayScript(GetPrice(), self)
 			SetOwner(playerID)
 			Return TRUE
 		EndIf
@@ -1286,7 +1293,7 @@ endrem
 
 		'=== X-Rated Overlay ===
 		If IsXRated()
-			GetSpriteFromRegistry("gfx_datasheet_overlay_xrated").Draw(contentX + sheetWidth, y, -1, ALIGN_RIGHT_TOP)
+			GetSpriteFromRegistry(spriteNameOverlayXRatedLS).Draw(contentX + sheetWidth, y, -1, ALIGN_RIGHT_TOP)
 		Endif
 	End Method
 End Type

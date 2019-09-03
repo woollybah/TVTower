@@ -73,6 +73,12 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 		startProgrammeGUIDs = new string[0]
 
 
+		refillMovieAgencyTime = GameRules.refillMovieAgencyTimer
+		refillScriptAgencyTime = GameRules.refillScriptAgencyTimer
+		refillAdAgencyTime = GameRules.refillAdAgencyTimer
+		refillAdAgencyOverridePercentage = GameRules.refillAdAgencyPercentage
+
+
 		'=== SETUP TOOLTIPS ===
 		TTooltip.UseFontBold = GetBitmapFontManager().baseFontBold
 		TTooltip.UseFont = GetBitmapFontManager().baseFont
@@ -81,7 +87,6 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 
 		'=== SETUP INTERFACE ===
 		GetInGameInterface() 'calls init() if not done yet
-
 
 		'=== EVENTS ===
 		'=== remove all registered event listeners
@@ -136,7 +141,7 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 	Method EndGame:int()
 		If Self.gamestate = TGame.STATE_RUNNING
 			'start playing the menu music again
-			GetSoundManager().PlayMusicPlaylist("menu")
+			GetSoundManagerBase().PlayMusicPlaylist("menu")
 		endif
 
 		'reset speeds (so janitor in main menu moves "normal" again)
@@ -154,7 +159,7 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 		'state (eg. when loaded)
 		GetGame().SetGamestate(TGame.STATE_RUNNING, True)
 
-		TSoundManager.GetInstance().PlayMusicPlaylist("default")
+		GetSoundManagerBase().PlayMusicPlaylist("default")
 
 
 		local currDate:int = int(Time.GetSystemTime("%m%d"))
@@ -199,6 +204,9 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 
 		'so we could add news etc.
 		EventManager.triggerEvent(TEventSimple.Create("Game.OnStart", New TData.addNumber("minute", GetWorldTime().GetDayMinute()).addNumber("hour", GetWorldTime().GetDayHour()).addNumber("day", GetWorldTime().GetDay()) ))
+		'inform about the begin of this game (for now equal to "OnStart")
+		EventManager.triggerEvent(TEventSimple.Create("Game.OnBegin", New TData.addNumber("minute", GetWorldTime().GetDayMinute()).addNumber("hour", GetWorldTime().GetDayHour()).addNumber("day", GetWorldTime().GetDay()) ))
+
 	End Method
 
 
@@ -413,6 +421,8 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 			'prepare new player data (take credit, give starting programme...)
 			PreparePlayerStep1(playerID, True)
 			PreparePlayerStep2(playerID)
+
+			StartPlayer(playerID)
 		endif
 
 
@@ -451,6 +461,8 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 			player.aiData = new TData
 			TLogger.Log("ResetPlayer()", "Removed aiData", LOG_DEBUG)
 		endif
+		'inform player AI (if existing) it stopped (means it also stops its thread)
+		player.StopAI()
 
 
 
@@ -583,8 +595,8 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 
 		'=== SELL ALL STATIONS ===
 		local map:TStationMap = GetStationMap(playerID, True)
-		For local station:TStation = EachIn map.stations
-			map.Removestation(station, True, True)
+		For local station:TStationBase = EachIn map.stations
+			map.RemoveStation(station, True, True)
 		Next
 		GetStationMapCollection().Update()
 		TLogger.Log("ResetPlayer()", "Sold stations", LOG_DEBUG)
@@ -633,6 +645,12 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 		GetPlayerFinanceHistoryListCollection().Set(playerID, CreateList())
 		'also reset bankrupt level
 		SetPlayerBankruptLevel(playerID, 0)
+	End Method
+
+
+	Method StartPlayer(playerID:int)
+		'now names might differ
+		EventManager.triggerEvent( TEventSimple.Create("Game.OnStartPlayer", new TData.AddNumber("playerID", playerID)) )
 	End Method
 
 
@@ -807,8 +825,11 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 				endrem
 			endif
 		endif
-
+		'refresh stats
+		GetStationMap(playerID).DoCensus()
+		GetStationMap(playerID).Update()
 		GetStationMapCollection().Update()
+		if GetStationMap(playerID).GetReach() = 0 then throw "Player initialization: GetStationMap("+playerID+").GetReach() returned 0."
 
 
 		'=== FINANCE ===
@@ -907,7 +928,8 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 			local adContractBase:TAdContractBase = GetAdContractBaseCollection().GetByGUID(guid)
 			if adContractBase
 				'forcefully add to the collection (skips requirements checks)
-				GetPlayerProgrammeCollection(playerID).AddAdContract(New TAdContract.Create(adContractBase), True)
+				local ad:TAdContract = New TAdContract.Create(adContractBase)
+				GetPlayerProgrammeCollection(playerID).AddAdContract(ad, True)
 			endif
 		Next
 
@@ -1174,6 +1196,11 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 		'stationmaps on sign - which needs 4 stationmaps to be "set up"
 		For local playerID:int = 1 to 4
 			PreparePlayerStep2(playerID)
+		Next
+
+
+		For local playerID:int = 1 to 4
+			StartPlayer(playerID)
 		Next
 
 
@@ -1520,7 +1547,7 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 			local finance:TPlayerFinance = Player.GetFinance(day)
 			if not finance then Throw "ComputeDailyCosts failed: finance = null."
 			'stationfees
-			finance.PayStationFees( Player.GetStationMap().CalculateStationCosts() )
+			finance.PayStationFees( GetStationMap(Player.playerID, True).CalculateStationCosts() )
 			'interest rate for your current credit
 			finance.PayCreditInterest( finance.GetCreditInterest() )
 			'newsagencyfees
@@ -1668,9 +1695,10 @@ Type TGame Extends TGameBase {_exposeToLua="selected"}
 		GuiManager.ResetFocus()
 		GuiManager.SetKeystrokeReceiver(Null)
 
+
 		'reset mouse clicks
-		MouseManager.ResetKey(1)
-		MouseManager.ResetKey(2)
+		MouseManager.ResetClicked(1)
+		MouseManager.ResetClicked(2)
 
 
 		Self.gamestate = gamestate
@@ -1935,12 +1963,12 @@ endrem
 	'- weather (without extras like tornado-news, ...)
 	Method UpdateBaseGameModifiers()
 		'WEATHER-AUDIENCE
-		GameConfig.SetModifier("StationMap.Audience.WeatherMod", CalculateAudienceWeatherMod())
+		GameConfig.SetModifier(modKeyStationMap_Audience_WeatherModLS, CalculateAudienceWeatherMod())
 
 		'WEATHER-STATION-RECEPTION
-		GameConfig.SetModifier("StationMap.Reception.AntennaMod", CalculateStationMapAntennaReceptionWeatherMod())
-		GameConfig.SetModifier("StationMap.Reception.CableNetworkMod", CalculateStationMapCableNetworkReceptionWeatherMod())
-		GameConfig.SetModifier("StationMap.Reception.SatelliteMod", CalculateStationMapSatelliteReceptionWeatherMod())
+		GameConfig.SetModifier(modKeyStationMap_Reception_AntennaModLS, CalculateStationMapAntennaReceptionWeatherMod())
+		GameConfig.SetModifier(modKeyStationMap_Reception_CableNetworkModLS, CalculateStationMapCableNetworkReceptionWeatherMod())
+		GameConfig.SetModifier(modKeyStationMap_Reception_SatelliteModLS, CalculateStationMapSatelliteReceptionWeatherMod())
 	End Method
 
 

@@ -12,7 +12,7 @@ Import "base.gfx.sprite.bmx"
 
 Type TGUIinput Extends TGUIobject
     Field maxLength:Int
-    Field color:TColor = new TColor.Create(120,120,120)
+    Field color:TColor = TColor.Create(120,120,120)
     Field maxTextWidthBase:Int
     Field maxTextWidthCurrent:Int
     Field spriteName:String = "gfx_gui_input.default"
@@ -59,7 +59,7 @@ Type TGUIinput Extends TGUIobject
 		else
 			SetMaxLength(2048)
 		endif
-'		SetValueColor(new TColor.Init(120,120,120))
+'		SetValueColor(TColor.Create(120,120,120))
 
 		'this element reacts to keystrokes
 		SetOption(GUI_OBJECT_CAN_RECEIVE_KEYSTROKES, True)
@@ -160,7 +160,7 @@ Type TGUIinput Extends TGUIobject
 				'active input fields react to mouse clicks on the input-area
 				'to move the cursor position
 				If Self = GuiManager.GetKeystrokeReceiver()
-					if MouseManager.IsHit(1) and _textPos
+					if MouseManager.IsClicked(1) and _textPos
 						local screenRect:TRectangle = new TRectangle
 						'shrink screenrect to "text area"
 						screenRect.position.SetXY(_textPos.GetX(), _textPos.GetY())
@@ -181,6 +181,9 @@ Type TGUIinput Extends TGUIobject
 							Next
 							if newCursorPosition <> -1 then _cursorPosition = newCursorPosition
 'print " ... Mouse "+int(MouseManager.x)+", "+int(MouseManager.y)+" is in. Position: " + old +" => " + _cursorPosition + "  valueClickedPixel="+valueClickedPixel+"  valueOffsetPixels="+valueOffsetPixels
+
+							'handled left click
+							MouseManager.ResetClicked(1)
 						endif
 					EndIf
 				EndIf

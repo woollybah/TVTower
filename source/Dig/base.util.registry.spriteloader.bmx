@@ -11,7 +11,7 @@ Rem
 
 	LICENCE: zlib/libpng
 
-	Copyright (C) 2002-2015 Ronny Otto, digidea.de
+	Copyright (C) 2002-2019 Ronny Otto, digidea.de
 
 	This software is provided 'as-is', without any express or
 	implied warranty. In no event will the authors be held liable
@@ -45,6 +45,9 @@ new TRegistrySpriteLoader.Init()
 '===== LOADER IMPLEMENTATION =====
 'loader caring about "<sprite>"-types
 Type TRegistrySpriteLoader extends TRegistryImageLoader
+	Global keySpriteLS:TLowerString = new TLowerString.Create("sprite")
+	Global keySpritePackLS:TLowerString = new TLowerString.Create("spritepack")
+
 	Method Init:Int()
 		name = "Sprite"
 		'we also load each image as sprite
@@ -75,6 +78,7 @@ Type TRegistrySpriteLoader extends TRegistryImageLoader
 	Method GetConfigFromXML:TData(loader:TRegistryLoader, node:TxmlNode)
 		local data:TData = Super.GetConfigFromXML(loader, node)
 
+
 		local fieldNames:String[]
 		fieldNames :+ ["name", "id"]
 		fieldNames :+ ["x", "y", "w", "h"]
@@ -82,7 +86,7 @@ Type TRegistrySpriteLoader extends TRegistryImageLoader
 		fieldNames :+ ["paddingLeft", "paddingTop", "paddingRight", "paddingBottom"]
 		fieldNames :+ ["r", "g", "b"]
 		fieldNames :+ ["frames|f"]
-		fieldNames :+ ["ninepatch"]
+		fieldNames :+ ["ninepatch", "tilemode"]
 		fieldNames :+ ["rotated"]
 		TXmlHelper.LoadValuesToData(node, data, fieldNames)
 
@@ -100,8 +104,6 @@ Type TRegistrySpriteLoader extends TRegistryImageLoader
 			childrenData :+ [childData]
 		Next
 		if len(childrenData)>0 then data.Add("childrenData", childrenData)
-
-
 
 		return data
 	End Method
@@ -287,13 +289,13 @@ End Type
 
 
 '===== CONVENIENCE REGISTRY ACCESSORS =====
-Function GetSpritePackFromRegistry:TSpritePack(name:string, defaultNameOrSpritePack:object = Null)
-	Return TSpritePack( GetRegistry().Get(name, defaultNameOrSpritePack, "spritepack") )
+Function GetSpritePackFromRegistry:TSpritePack(name:Object, defaultNameOrSpritePack:object = Null)
+	Return TSpritePack( GetRegistry().Get(name, defaultNameOrSpritePack, TRegistrySpriteLoader.keySpritePackLS) )
 End Function
 
 
-Function GetSpriteFromRegistry:TSprite(name:string, defaultNameOrSprite:object = Null)
-	Return TSprite( GetRegistry().Get(name, defaultNameOrSprite, "sprite") )
+Function GetSpriteFromRegistry:TSprite(name:Object, defaultNameOrSprite:object = Null)
+	Return TSprite( GetRegistry().Get(name, defaultNameOrSprite, TRegistrySpriteLoader.keySpriteLS) )
 End Function
 
 
@@ -315,8 +317,8 @@ Function GetSpriteGroupFromRegistry:TSprite[](baseName:string, defaultNameOrSpri
 	if result.length = 0 and defaultNameOrSprite <> null
 		if TSprite(defaultNameOrSprite)
 			result :+ [TSprite(defaultNameOrSprite)]
-		elseif string(defaultNameOrSprite) <> ""
-			sprite = TSprite( GetRegistry().Get(string(defaultNameOrSprite), null, "sprite") )
+		else
+			sprite = TSprite( GetRegistry().Get(defaultNameOrSprite, null, TRegistrySpriteLoader.keySpriteLS) )
 			if sprite then result :+ [sprite]
 		endif
 	endif

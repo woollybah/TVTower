@@ -308,8 +308,10 @@ Type TAdContractBase extends TBroadcastMaterialSource {_exposeToLua}
 
 	'minimum audience (real value calculated on sign)
 	Field minAudienceBase:Float
-	'minimum image base value (real value calculated on sign)
+	'minimum channel image base value (real value calculated on sign)
 	Field minImage:Float
+	'maximum channel image base value (real value calculated on sign)
+	Field maxImage:Float
 	'flag wether price is fixed or not
 	Field fixedPrice:Int = False
 	'base of profit (real value calculated on sign)
@@ -356,6 +358,8 @@ Type TAdContractBase extends TBroadcastMaterialSource {_exposeToLua}
 		"topicality:infomercialRefresh"
 		  changes how much an infomercial "regenerates" on topicality per day
 	endrem
+	Global modKeyTopicality_infomercialRefreshLS:TLowerString = new TLowerString.Create("topicality::infomercialRefresh")
+	Global modKeyTopicality_infomercialWearoffLS:TLowerString = new TLowerString.Create("topicality::infomercialWearoff")
 
 
 	Method GenerateGUID:string()
@@ -363,7 +367,12 @@ Type TAdContractBase extends TBroadcastMaterialSource {_exposeToLua}
 	End Method
 
 
-	Method Create:TAdContractBase(GUID:String, title:TLocalizedString, description:TLocalizedString, daysToFinish:Int, spotCount:Int, targetgroup:Int, minAudience:Float, minImage:Float, fixedPrice:Int, profit:Float, penalty:Float)
+	Method GetMaterialSourceType:Int() {_exposeToLua}
+		return TVTBroadcastMaterialSourceType.ADCONTRACT
+	End Method
+
+
+	Method Create:TAdContractBase(GUID:String, title:TLocalizedString, description:TLocalizedString, daysToFinish:Int, spotCount:Int, targetgroup:Int, minAudience:Float, minImage:Float, maxImage:Float, fixedPrice:Int, profit:Float, penalty:Float)
 		self.SetGUID(GUID)
 		self.title = title
 		self.description = description
@@ -372,6 +381,7 @@ Type TAdContractBase extends TBroadcastMaterialSource {_exposeToLua}
 		self.limitedToTargetGroup = targetGroup
 		self.minAudienceBase = minAudience
 		self.minImage = minImage
+		self.maxImage = maxImage
 		self.fixedPrice = fixedPrice
 		self.profitBase	= profit
 		self.penaltyBase = penalty
@@ -494,6 +504,7 @@ Type TAdContractBase extends TBroadcastMaterialSource {_exposeToLua}
 	End Method
 
 
+	'override
 	Method GetQuality:Float() {_exposeToLua}
 		return quality
 	End Method
@@ -516,12 +527,12 @@ Type TAdContractBase extends TBroadcastMaterialSource {_exposeToLua}
 
 
 	Method GetInfomercialRefreshModifier:float()
-		return GetModifier("topicality::infomercialRefresh")
+		return GetModifier(modKeyTopicality_infomercialRefreshLS)
 	End Method
 
 
 	Method GetInfomercialWearoffModifier:float()
-		return GetModifier("topicality::infomercialWearoff")
+		return GetModifier(modKeyTopicality_infomercialWearoffLS)
 	End Method
 
 
@@ -565,15 +576,28 @@ Type TAdContractBase extends TBroadcastMaterialSource {_exposeToLua}
 	End Method
 
 
+	Method IsLimitedToProgrammeGenre:int(genre:int) {_exposeToLua}
+		Return GetLimitedToProgrammeGenre() = genre
+	End Method
+
 	Method GetLimitedToProgrammeGenre:int() {_exposeToLua}
 		Return limitedToProgrammeGenre
 	End Method
 
 
+	Method IsLimitedToProgrammeFlag:int(flag:int) {_exposeToLua}
+		Return (GetLimitedToProgrammeFlag() & flag) > 0
+	End Method
+
+	Method GetLimitedToProgrammeFlag:int() {_exposeToLua}
+		Return limitedToProgrammeFlag
+	End Method
+
+
+
 	Method IsLimitedToTargetGroup:int(targetGroup:int) {_exposeToLua}
 		Return (GetLimitedToTargetGroup() & targetGroup) > 0
 	End Method
-
 
 	Method GetLimitedToTargetGroup:int() {_exposeToLua}
 		'with no required audience, we cannot limit to target groups
@@ -922,6 +946,8 @@ Type TAdContract extends TBroadcastMaterialSource {_exposeToLua="selected"}
 	Method IsAvailableToSign:Int(playerID:int) {_exposeToLua}
 		'not enough channel image?
 		if GetMinImage() > 0 and 0.01*GetPublicImageCollection().Get(playerID).GetAverageImage() < GetMinImage() then return False
+		'or too much?
+		if GetMaxImage() > 0 and 0.01*GetPublicImageCollection().Get(playerID).GetAverageImage() > GetMaxImage() then return False
 
 		Return (not IsSigned())
 	End Method
@@ -946,14 +972,23 @@ Type TAdContract extends TBroadcastMaterialSource {_exposeToLua="selected"}
 	End Method
 
 
-	Method IsCompleted:int()
+	Method IsCompleted:int() {_exposeToLua}
 		return state = STATE_OK
 	End Method
 
 
-	Method IsFailed:int()
+	Method IsFailed:int() {_exposeToLua}
 		return state = STATE_FAILED
 	End Method
+
+
+	'returns whether the contract was fulfilled and can get finished
+ 	Method CanComplete:int()
+		'already finished / failed?
+		if state = STATE_OK or state = STATE_FAILED then return False
+
+ 		Return (base.spotCount <= spotsSent)
+ 	End Method
 
 
 	'percents = 0.0 - 1.0 (0-100%)
@@ -1094,6 +1129,12 @@ Type TAdContract extends TBroadcastMaterialSource {_exposeToLua="selected"}
 	End Method
 
 
+	Method GetProfitCPM:Float(playerID:Int=-1) {_exposeToLua}
+		if playerID < 0 then playerID = owner
+		return 1000 * GetProfitForPlayer(playerID, False) / GetMinAudienceForPlayer(playerID)
+	End Method
+
+
 	Method GetInfomercialProfitForPlayer:Int(playerID:Int, invalidateCache:int = False)
 		'already calculated and data for owner requested
 		If not invalidateCache
@@ -1149,6 +1190,12 @@ Type TAdContract extends TBroadcastMaterialSource {_exposeToLua="selected"}
 	Method GetPenalty:Int(playerID:Int=-1) {_exposeToLua}
 		if playerID < 0 then playerID = owner
 		Return GetPenaltyForPlayer(playerID, False)
+	End Method
+
+
+	Method GetPenaltyCPM:Float(playerID:Int=-1) {_exposeToLua}
+		if playerID < 0 then playerID = owner
+		return 1000 * GetPenaltyForPlayer(playerID, False) / GetMinAudienceForPlayer(playerID)
 	End Method
 
 
@@ -1218,7 +1265,7 @@ price :* Max(1, minAudience/1000)
 		'specific targetgroups change price
 		If GetLimitedToTargetGroup() > 0 Then price :* limitedToTargetGroupMultiplier
 		'limiting to specific genres change the price too
-		If GetLimitedToGenre() > 0 Then price :* limitedToGenreMultiplier
+		If GetLimitedToProgrammeGenre() > 0 Then price :* limitedToGenreMultiplier
 		'limiting to specific flags change the price too
 		If GetLimitedToProgrammeFlag() > 0 Then price :* limitedToProgrammeFlagMultiplier
 
@@ -1323,6 +1370,11 @@ price :* Max(1, minAudience/1000)
 	End Method
 
 
+	Method GetDaySigned:Int() {_exposeToLua}
+		return daySigned
+	End Method
+
+
 	'time left for sending all contract-spots from now
 	Method GetTimeLeft:Long(now:Long = -1) {_exposeToLua}
 		if now < 0 then now = GetWorldTime().GetTimeGone()
@@ -1340,12 +1392,6 @@ price :* Max(1, minAudience/1000)
 	'get the contract (to access its ID or title by its GetXXX() )
 	Method GetBase:TAdContractBase() {_exposeToLua}
 		Return base
-	End Method
-
-
-	'returns whether the contract was fulfilled
-	Method isSuccessful:int() {_exposeToLua}
-		Return (base.spotCount <= spotsSent)
 	End Method
 
 
@@ -1394,6 +1440,11 @@ price :* Max(1, minAudience/1000)
 	End Method
 
 
+	Method GetMaxImage:Float() {_exposeToLua}
+		Return base.maxImage
+	End Method
+
+
 	Method IsLimitedToTargetGroup:int(targetGroup:int) {_exposeToLua}
 		return base.IsLimitedtoTargetGroup(targetGroup)
 	End Method
@@ -1420,12 +1471,16 @@ price :* Max(1, minAudience/1000)
 	End Method
 
 
-	Method GetLimitedToGenre:Int() {_exposeToLua}
+	Method IsLimitedToProgrammeGenre:int(genre:int) {_exposeToLua}
+		return base.IsLimitedToProgrammeGenre(genre)
+	End Method
+
+	Method GetLimitedToProgrammeGenre:Int() {_exposeToLua}
 		Return base.GetLimitedToProgrammeGenre()
 	End Method
 
 
-	Method GetLimitedToGenreString:String(genre:Int=-1) {_exposeToLua}
+	Method GetLimitedToProgrammeGenreString:String(genre:Int=-1) {_exposeToLua}
 		'if no genre given, use the one of the object
 		if genre < 0 then genre = base.limitedToProgrammeGenre
 		if genre < 0 then return ""
@@ -1434,8 +1489,12 @@ price :* Max(1, minAudience/1000)
 	End Method
 
 
+	Method IsLimitedToProgrammeFlag:int(flag:int) {_exposeToLua}
+		return base.IsLimitedToProgrammeFlag(flag)
+	End Method
+
 	Method GetLimitedToProgrammeFlag:Int() {_exposeToLua}
-		Return base.limitedToProgrammeFlag
+		Return base.GetLimitedToProgrammeFlag()
 	End Method
 
 
@@ -1617,16 +1676,7 @@ price :* Max(1, minAudience/1000)
 		local daysLeft:int = GetDaysLeft()
 		'if unsigned, use DaysToFinish
 		if owner <= 0 then daysLeft = GetDaysToFinish()
-
 		local imageText:String
-		local daysLeftText:String
-		If daysLeft = 1
-			daysLeftText = getLocale("AD_SEND_TILL_TOMORROW")
-		ElseIf daysLeft = 0
-			daysLeftText = getLocale("AD_SEND_TILL_MIDNIGHT")
-		Else
-			daysLeftText = getLocale("AD_SEND_TILL_TOLATE")
-		EndIf
 
 
 		'=== CALCULATE SPECIAL AREA HEIGHTS ===
@@ -1645,16 +1695,25 @@ price :* Max(1, minAudience/1000)
 
 		'message area
 		If GetLimitedToTargetGroup() > 0 then msgAreaH :+ msgH
-		If GetLimitedToGenre() >= 0 then msgAreaH :+ msgH
+		If GetLimitedToProgrammeGenre() >= 0 then msgAreaH :+ msgH
 		If GetLimitedToProgrammeFlag() > 0 then msgAreaH :+ msgH
-		'warn if short of time
-		If daysLeft <= 1 then msgAreaH :+ msgH
+		'warn if short of time or finished/failed
+		If daysLeft <= 1 or IsCompleted()
+			msgAreaH :+ msgH
+		EndIf
+
 		'only show image hint when NOT signed (after signing the image
 		'is not required anymore)
 		If owner <= 0 and GetMinImage() > 0 and 0.01*GetPublicImage( GetObservedPlayerID() ).GetAverageImage() < GetMinImage()
 			local requiredImage:string = MathHelper.NumberToString(GetMinImage()*100,2)
 			local channelImage:string = MathHelper.NumberToString(GetPublicImage( GetObservedPlayerID() ).GetAverageImage(),2)
 			imageText = getLocale("AD_CHANNEL_IMAGE_TOO_LOW").Replace("%IMAGE%", requiredImage).Replace("%CHANNELIMAGE%", channelImage)
+
+			msgAreaH :+ msgH
+		ElseIf owner <= 0 and GetMaxImage() > 0 and 0.01*GetPublicImage( GetObservedPlayerID() ).GetAverageImage() > GetMaxImage()
+			local requiredMaxImage:string = MathHelper.NumberToString(GetMaxImage()*100,2)
+			local channelImage:string = MathHelper.NumberToString(GetPublicImage( GetObservedPlayerID() ).GetAverageImage(),2)
+			imageText = getLocale("AD_CHANNEL_IMAGE_TOO_HIGH").Replace("%IMAGE%", requiredMaxImage).Replace("%CHANNELIMAGE%", channelImage)
 
 			msgAreaH :+ msgH
 		endif
@@ -1691,8 +1750,8 @@ price :* Max(1, minAudience/1000)
 			skin.RenderMessage(contentX+5, contentY, contentW - 9, -1, getLocale("AD_TARGETGROUP")+": "+GetLimitedToTargetGroupString(), "targetGroupLimited", "warning", skin.fontSemiBold, ALIGN_CENTER_CENTER)
 			contentY :+ msgH
 		EndIf
-		If GetLimitedToGenre() >= 0
-			skin.RenderMessage(contentX+5, contentY, contentW - 9, -1, getLocale("AD_PLEASE_GENRE_X").Replace("%GENRE%", GetLimitedToGenreString()), "warning", "warning", skin.fontSemiBold, ALIGN_CENTER_CENTER)
+		If GetLimitedToProgrammeGenre() >= 0
+			skin.RenderMessage(contentX+5, contentY, contentW - 9, -1, getLocale("AD_PLEASE_GENRE_X").Replace("%GENRE%", GetLimitedToProgrammeGenreString()), "warning", "warning", skin.fontSemiBold, ALIGN_CENTER_CENTER)
 			contentY :+ msgH
 		EndIf
 		If GetLimitedToProgrammeFlag() > 0
@@ -1704,8 +1763,16 @@ price :* Max(1, minAudience/1000)
 			skin.RenderMessage(contentX+5, contentY, contentW - 9, -1, imageText, "warning", "warning", skin.fontSemiBold, ALIGN_CENTER_CENTER)
 			contentY :+ msgH
 		EndIf
-		If daysLeft <= 1
-			skin.RenderMessage(contentX+5, contentY, contentW - 9, -1, daysLeftText, "warning", "warning", skin.fontSemiBold, ALIGN_CENTER_CENTER)
+
+		If IsCompleted()
+			skin.RenderMessage(contentX+5, contentY, contentW - 9, -1, GetLocale("ADCONTRACT_FINISHED"), "ok", "good", skin.fontSemiBold, ALIGN_CENTER_CENTER)
+			contentY :+ msgH
+		ElseIf daysLeft <= 1
+			Select daysLeft
+				case 1	skin.RenderMessage(contentX+5, contentY, contentW - 9, -1, getLocale("AD_SEND_TILL_TOMORROW"), "warning", "warning", skin.fontSemiBold, ALIGN_CENTER_CENTER)
+				case 0	skin.RenderMessage(contentX+5, contentY, contentW - 9, -1, getLocale("AD_SEND_TILL_MIDNIGHT"), "warning", "warning", skin.fontSemiBold, ALIGN_CENTER_CENTER)
+				default skin.RenderMessage(contentX+5, contentY, contentW - 9, -1, GetLocale("ADCONTRACT_FAILED"), "warning", "bad", skin.fontSemiBold, ALIGN_CENTER_CENTER)
+			EndSelect
 			contentY :+ msgH
 		EndIf
 		'if there is a message then add padding to the bottom
@@ -1721,8 +1788,10 @@ price :* Max(1, minAudience/1000)
 		'days left for this contract
 		If daysLeft > 1 or daysLeft = 0
 			skin.RenderBox(contentX + 5, contentY, 96, -1, daysLeft +" "+ getLocale("DAYS"), "runningTime", "neutral", skin.fontBold)
-		Else
+		Elseif daysLeft > 1
 			skin.RenderBox(contentX + 5, contentY, 96, -1, daysLeft +" "+ getLocale("DAY"), "runningTime", "neutral", skin.fontBold)
+		Else
+			skin.RenderBox(contentX + 5, contentY, 96, -1, "---", "runningTime", "neutral", skin.fontBold)
 		EndIf
 
 		'spots successfully sent
@@ -1781,14 +1850,14 @@ price :* Max(1, minAudience/1000)
 			contentY :+ 12
 			skin.fontNormal.draw("Zuschaueranforderung: "+GetMinAudienceForPlayer(forPlayerID) + "  ("+MathHelper.NumberToString(GetMinAudiencePercentage()*100,2)+"%)", contentX + 5, contentY)
 			contentY :+ 12
-			skin.fontNormal.draw("MindestImage: " + MathHelper.NumberToString(base.minImage*100,2)+"%", contentX + 5, contentY)
+			skin.fontNormal.draw("SenderImage: " + MathHelper.NumberToString(GetMinImage()*100,2)+"%" +" - " + MathHelper.NumberToString(GetMaxImage()*100,2)+"%", contentX + 5, contentY)
 			contentY :+ 12
 			skin.fontNormal.draw("Zielgruppe: " + GetLimitedToTargetGroup() + " (" + GetLimitedToTargetGroupString() + ")", contentX + 5, contentY)
 			contentY :+ 12
-			if GetLimitedToGenre() >= 0
-				skin.fontNormal.draw("Genre: " + GetLimitedToGenre() + " ("+ GetLimitedToGenreString() + ")", contentX + 5, contentY)
+			if GetLimitedToProgrammeGenre() >= 0
+				skin.fontNormal.draw("Genre: " + GetLimitedToProgrammeGenre() + " ("+ GetLimitedToProgrammeGenreString() + ")", contentX + 5, contentY)
 			else
-				skin.fontNormal.draw("Genre: " + GetLimitedToGenre() + " (keine Einschraenkung)", contentX + 5, contentY)
+				skin.fontNormal.draw("Genre: " + GetLimitedToProgrammeGenre() + " (keine Einschraenkung)", contentX + 5, contentY)
 			endif
 			contentY :+ 12
 			skin.fontNormal.draw("Vertraege mit dieser Werbung: " + base.GetCurrentlyUsedByContractCount(), contentX + 5, contentY)
@@ -1930,7 +1999,12 @@ price :* Max(1, minAudience/1000)
 		If self.getDaysLeft() < 0 then return 0
 
 		'multiply by spot count (the more to send in total, the more acute)
-		Return self.GetSpotsToSend() * GetSpotsToSendPercentage()  * GetTimeGonePercentage()^3
+'		Return self.GetSpotsToSend() * GetSpotsToSendPercentage() * GetTimeGonePercentage()^2
+		'0 days = 1
+		'1 day  = 0.25
+		'2      = 0.125
+		'3      = 0.0725
+		Return self.GetSpotsToSend() * GetSpotsToSendPercentage() * (0.25 ^ GetDaysLeft())
 	End Method
 
 
@@ -1964,6 +2038,8 @@ Type TAdContractBaseFilter
 	Field minAudienceMax:Float = -1.0
 	Field minImageMin:Float = -1.0
 	Field minImageMax:Float = -1.0
+	Field maxImageMin:Float = -1.0
+	Field maxImageMax:Float = -1.0
 	Field currentlyUsedByContractsLimitMin:int = -1
 	Field currentlyUsedByContractsLimitMax:int = -1
 	Field limitedToProgrammeGenres:int[]
@@ -1993,9 +2069,16 @@ Type TAdContractBaseFilter
 	End Method
 
 
-	Method SetImage:TAdContractBaseFilter(minImage:float=-1.0, maxImage:Float=-1.0)
-		minImageMin = minImage
-		minImageMax = maxImage
+	Method SetMinImageRange:TAdContractBaseFilter(minImageMin:float=-1.0, minImageMax:Float=-1.0)
+		self.minImageMin = minImageMin
+		self.minImageMax = minImageMax
+		Return self
+	End Method
+
+
+	Method SetMaxImageRange:TAdContractBaseFilter(maxImageMin:float=-1.0, maxImageMax:Float=-1.0)
+		self.maxImageMin = maxImageMin
+		self.maxImageMax = maxImageMax
 		Return self
 	End Method
 
@@ -2066,7 +2149,8 @@ Type TAdContractBaseFilter
 		local result:string = ""
 		result :+ "Audience: " + MathHelper.NumberToString(100*minAudienceMin,2)+" - "+MathHelper.NumberToString(100 * minAudienceMax, 2)+"%"
 		result :+ "  "
-		result :+ "Image: " + MathHelper.NumberToString(minImageMin,2)+" - "+MathHelper.NumberToString(minImageMax, 2)
+		result :+ "MinImage: " + MathHelper.NumberToString(minImageMin,2)+" - "+MathHelper.NumberToString(minImageMax, 2)
+		result :+ "MaxImage: " + MathHelper.NumberToString(maxImageMin,2)+" - "+MathHelper.NumberToString(maxImageMax, 2)
 		return result
 	End Method
 
@@ -2087,6 +2171,9 @@ Type TAdContractBaseFilter
 
 		if minImageMin >= 0 and contract.minImage < minImageMin then return False
 		if minImageMax >= 0 and contract.minImage > minImageMax then return False
+
+		if maxImageMin >= 0 and contract.maxImage < maxImageMin then return False
+		if maxImageMax >= 0 and contract.maxImage > maxImageMax then return False
 
 
 		'limited simultaneous usage ?

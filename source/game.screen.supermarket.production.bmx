@@ -658,8 +658,12 @@ Type TScreenHandler_SupermarketProduction extends TScreenHandler
 		guiCast.remove()
 		guiCast = null
 
+
+		'avoid clicks
 		'remove right click - to avoid leaving the room
-		MouseManager.ResetKey(2)
+		MouseManager.ResetClicked(2)
+		'also avoid long click (touch screen)
+		MouseManager.ResetLongClicked(1)
 	End Function
 
 
@@ -885,7 +889,12 @@ Type TScreenHandler_SupermarketProduction extends TScreenHandler
 				if not castSlotList.SelectCastWindowIsOpen()
 					SetCurrentProductionConcept(null)
 				endif
-				MouseManager.ResetKey(2)
+
+				'abort room leaving
+				'remove right click
+				MouseManager.ResetClicked(2)
+				'also avoid long click (touch screen)
+				MouseManager.ResetLongClicked(1)
 			endif
 		endif
 	End Method
@@ -1240,8 +1249,12 @@ Type TGUIProductionModalWindow extends TGUIModalWindow
 
 		if (MouseManager.IsClicked(2) or MouseManager.IsLongClicked(1))
 			Close(2)
-			MouseManager.ResetKey(1)
-			MouseManager.ResetKey(2)
+
+			'avoid clicks
+			'remove right click - to avoid leaving the room
+			MouseManager.ResetClicked(2)
+			'also avoid long click (touch screen)
+			MouseManager.ResetLongClicked(1)
 		endif
 
 		return super.Update()
@@ -2570,8 +2583,8 @@ Type TGUIProductionCompanyDropDownItem Extends TGUIDropDownItem
 
 	Const paddingBottom:Int	= 6
 	Const paddingTop:Int = 0
-	Global xpColor:TColor = new TColor.Create(70,85,160)
-	Global sympathyColor:TColor = new TColor.Create(70,160,90)
+	Global xpColor:TColor = TColor.Create(70,85,160)
+	Global sympathyColor:TColor = TColor.Create(70,160,90)
 
 
 	Method CreateSimple:TGUIProductionCompanyDropDownItem(company:TProductionCompanyBase)
