@@ -51,7 +51,7 @@ Type TStringBuffer
 	' the char buffer
 	Field buffer:Byte Ptr
 	
-	Global initialCapacity:Int = 16
+	Global initialCapacity:Int = 256
 	
 	Method New()
 		buffer = bmx_stringbuffer_new(initialCapacity)
@@ -136,6 +136,11 @@ Type TStringBuffer
 	End Rem
 	Method AppendUTF8String:TStringBuffer(chars:Byte Ptr)
 		bmx_stringbuffer_append_utf8string(buffer, chars)
+		Return Self
+	End Method
+
+	Method AppendStringBuffer:TStringBuffer(sb:TStringBuffer)
+		bmx_stringbuffer_append_stringbuffer(buffer, sb.buffer)
 		Return Self
 	End Method
 	
@@ -224,6 +229,26 @@ Type TStringBuffer
 	End Rem	
 	Method ToUpper:TStringBuffer()
 		bmx_stringbuffer_toupper(buffer)
+		Return Self
+	End Method
+
+	Rem
+	bbdoc: Left aligns the buffer, adjusted to the specified @length.
+	about: If buffer is longer than the specified length, the buffer is shortened to the specified length.
+	If the buffer is shorter than the specified length, spaces are added to the right end of the buffer to produce the appropriate length.
+	End Rem
+	Method LeftAlign:TStringBuffer(length:Int)
+		bmx_stringbuffer_leftalign(buffer, length)
+		Return Self
+	End Method
+	
+	Rem
+	bbdoc: Right aligns the buffer, adjusted to the specified @length.
+	about: If buffer is longer than the specified length, the buffer is shortened to the specified length.
+	If the buffer is shorter than the specified length, spaces are added to the left end of the buffer to produce the appropriate length.
+	End Rem
+	Method RightAlign:TStringBuffer(length:Int)
+		bmx_stringbuffer_rightalign(buffer, length)
 		Return Self
 	End Method
 

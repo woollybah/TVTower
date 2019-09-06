@@ -43,6 +43,7 @@ Import BRL.System		'for currenttime()
 Import Sdl.sdl
 ?
 Import "base.util.string.bmx"
+Import "external/stringbuffer.mod/stringbuffer.bmx"
 
 'create a basic log file
 Global AppLog:TLogFile = TLogFile.Create("App Log v1.0", "log.app.txt")
@@ -70,133 +71,148 @@ TLogger.setLogMode(LOG_ALL)
 TLogger.setPrintMode(LOG_ALL)
 
 Type TLogger
-	global printMode:int = 0 'print nothing
-	global logMode:int = 0 'log nothing
-	global lastLoggedMode:int =0
-	global lastPrintMode:int =0
-	global lastLoggedFunction:string=""
-	global lastPrintFunction:string=""
-	const MODE_LENGTH:int = 8
+	Global printMode:Int = 0 'print nothing
+	Global logMode:Int = 0 'log nothing
+	Global lastLoggedMode:Int =0
+	Global lastPrintMode:Int =0
+	Global lastLoggedFunction:String=""
+	Global lastPrintFunction:String=""
+	Global functionPadding:TStringBuffer = New TStringBuffer
+	Const MODE_LENGTH:Int = 8
 
 
 	'replace print mode flags
-	Function setPrintMode(flag:int=0)
+	Function setPrintMode(flag:Int=0)
 		printMode = flag
 	End Function
 
 
 	'replace logfile mode flags
-	Function setLogMode(flag:int=0)
+	Function setLogMode(flag:Int=0)
 		logMode = flag
 	End Function
 
 
 	'change an existing print mode (add or remove flag)
-	Function changePrintMode(flag:int=0, enable:int=TRUE)
-		if enable
+	Function changePrintMode(flag:Int=0, enable:Int=True)
+		If enable
 			printMode :| flag
-		else
+		Else
 			printMode :& ~flag
-		endif
+		EndIf
 	End Function
 
 	'change an existing logfile mode (add or remove flag)
-	Function changeLogMode(flag:int=0, enable:int=TRUE)
-		if enable
+	Function changeLogMode(flag:Int=0, enable:Int=True)
+		If enable
 			logMode :| flag
-		else
+		Else
 			logMode :& ~flag
-		endif
+		EndIf
 	End Function
 
 
 	'outputs a string to stdout and/or logfile
 	'exactTypeRequired: requires the mode to exactly contain the debugType
 	'                   so a LOG_AI|LOG_DEBUG will only get logged if BOTH are enabled
-	Function Log(functiontext:String = "", message:String, debugType:int=LOG_DEBUG, exactTypeRequired:int=FALSE)
-		Local debugtext:String = ""
-		If debugType & LOG_LOADING Then debugtext :+ "LOAD "
-		If debugType & LOG_GAME Then debugtext :+ "GAME "
-		If debugType & LOG_AI Then debugtext :+ "AI "
-		If debugType & LOG_XML Then debugtext :+ "XML "
-		If debugType & LOG_NETWORK Then debugtext :+ "NET "
-		If debugType & LOG_SAVELOAD Then debugtext :+  "SAVE "
+	Function Log(functiontext:String = "", message:String, debugType:Int=LOG_DEBUG, exactTypeRequired:Int=False)
+		Local debugText:TStringBuffer
 
-		If debugType & LOG_DEV Then debugtext :+ "DEV "
-		If debugType & LOG_DEBUG Then debugtext :+ "DBG "
-		'can only be one of them - sorted by priority
-		If debugType & LOG_ERROR
-			debugtext :+ "ERR "
-		ElseIf debugType & LOG_WARNING
-			debugtext :+ "WRN "
-		ElseIf debugType & LOG_INFO
-			debugtext :+ "INFO "
-		EndIf
-'		if len(debugText) < MODE_LENGTH
-			debugtext = LSet(debugtext, MODE_LENGTH) + " | "
-'		else
-'			debugtext = debugtext + " | "
-'		endif
-
-		local showFunctionText:string = ""
-		local doLog:int = FALSE
-		local doPrint:int = FALSE
+		Local showFunctionText:TStringBuffer
+		Local doLog:Int = False
+		Local doPrint:Int = False
 		'means ALL GIVEN TYPES have to fit
-		if exactTypeRequired
+		If exactTypeRequired
 			doLog = ((logMode & debugType) = debugType)
 			doPrint = ((printMode & debugType) = debugType)
 		'only one of the given types has to fit
-		else
+		Else
 			doLog = (logMode & debugType)
 			doPrint = (printMode & debugType)
-		endif
+		EndIf
+		
+		If doLog Or doPrint Then
+			debugText = New TStringBuffer
+			If debugType & LOG_LOADING Then debugtext.Append("LOAD ")
+			If debugType & LOG_GAME Then debugtext.Append("GAME ")
+			If debugType & LOG_AI Then debugtext.Append("AI ")
+			If debugType & LOG_XML Then debugtext.Append("XML ")
+			If debugType & LOG_NETWORK Then debugtext.Append("NET ")
+			If debugType & LOG_SAVELOAD Then debugtext.Append("SAVE ")
 
-		if doLog
-			if debugType = lastLoggedMode and functiontext = lastLoggedFunction
-				showFunctionText = LSet("", len(lastLoggedFunction))
-			else
+			If debugType & LOG_DEV Then debugtext.Append("DEV ")
+			If debugType & LOG_DEBUG Then debugtext.Append("DBG ")
+			'can only be one of them - sorted by priority
+			If debugType & LOG_ERROR
+				debugtext.Append("ERR ")
+			ElseIf debugType & LOG_WARNING
+				debugtext.Append("WRN ")
+			ElseIf debugType & LOG_INFO
+				debugtext.Append("INFO ")
+			EndIf
+
+			debugtext.LeftAlign(MODE_LENGTH).Append(" | ")
+
+		End If
+
+		If doLog
+			If debugType = lastLoggedMode And functiontext = lastLoggedFunction
+				functionPadding.LeftAlign(lastLoggedFunction.Length)
+				showFunctionText = functionPadding
+			Else
 				lastLoggedFunction = functiontext
 				lastLoggedMode = debugType
-				showFunctionText = functiontext
-			endif
+				showFunctionText = New TStringBuffer.Append(functiontext)
+			EndIf
 
-			AppLog.AddLog("[" + CurrentTime() + "] " + debugtext + Upper(showFunctionText) + ": " + message)
+			Local sb:TStringBuffer = New TStringBuffer
+			sb.Append("[").Append(CurrentTime()).Append("] ")
+			sb.AppendStringBuffer(debugtext)
+			sb.AppendStringBuffer(showFunctionText.ToUpper())
+			sb.Append(": ").Append(message)
+			
+			Local Text:String = sb.ToString()
+
+			AppLog.AddLog(Text)
 			'store errors in an extra file
-			if debugType & LOG_ERROR
-				AppErrorLog.AddLog("[" + CurrentTime() + "] " + debugtext + Upper(showFunctionText) + ": " + message)
-			endif
-		endif
+			If debugType & LOG_ERROR
+				AppErrorLog.AddLog(Text)
+			EndIf
+		EndIf
 
-		if doPrint
-			if debugType = lastPrintMode and functiontext = lastPrintFunction
-				showFunctionText = LSet("", len(lastPrintFunction))
-			else
+		If doPrint
+			If debugType = lastPrintMode And functiontext = lastPrintFunction
+				functionPadding.LeftAlign(lastPrintFunction.Length)
+				showFunctionText = functionPadding
+			Else
 				lastPrintFunction = functiontext
 				lastPrintMode = debugType
-				showFunctionText = functiontext
-			endif
+				showFunctionText = New TStringBuffer.Append(functiontext)
+			EndIf
 
-			'message = StringHelper.UTF8toISO8859(message)
-'			?Win32
-'			message = StringHelper.RemoveUmlauts(message)
-'			?
 			message = StringHelper.RemoveUmlauts(message)
 
-			local text:string = "[" + CurrentTime() + "] " + debugtext + Upper(showFunctionText) + ": " + message
+			Local sb:TStringBuffer = New TStringBuffer
+			sb.Append("[").Append(CurrentTime()).Append("] ")
+			sb.AppendStringBuffer(debugtext)
+			sb.AppendStringBuffer(showFunctionText.ToUpper())
+			sb.Append(": ").Append(message)
+
+			Local Text:String = sb.ToString()
 			?android
-				if debugType & LOG_DEBUG
+				If debugType & LOG_DEBUG
 					'debug not shown in normal logcat
 					'LogDebug(SDL_LOG_CATEGORY_APPLICATION, text)
-					LogInfo(SDL_LOG_CATEGORY_APPLICATION, text)
-				elseif debugType & LOG_WARNING
-					LogWarn(SDL_LOG_CATEGORY_APPLICATION, text)
-				else
-					LogInfo(SDL_LOG_CATEGORY_APPLICATION, text)
-				endif
-			?not android
-				print text
+					LogInfo(SDL_LOG_CATEGORY_APPLICATION, Text)
+				ElseIf debugType & LOG_WARNING
+					LogWarn(SDL_LOG_CATEGORY_APPLICATION, Text)
+				Else
+					LogInfo(SDL_LOG_CATEGORY_APPLICATION, Text)
+				EndIf
+			?Not android
+				Print Text
 			?
-		endif
+		EndIf
 	End Function
 
 End Type
